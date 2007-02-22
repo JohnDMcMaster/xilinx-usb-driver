@@ -24,6 +24,7 @@
 static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = 0;
 static struct usb_bus *busses = NULL;
+static struct usb_device *usb_cable;
 
 void hexdump(unsigned char *buf, int len);
 void diff(unsigned char *buf1, unsigned char *buf2, int len);
@@ -141,11 +142,39 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			fprintf(stderr,"EVENT_REGISTER\n");
 			{
 				struct event *e = (struct event*)(wdheader->data);
+				struct usb_bus *bus;
 				int i;
 
 				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
-				for (i = 0; i < e->dwNumMatchTables; i++)
+				for (i = 0; i < e->dwNumMatchTables; i++) {
 					fprintf(stderr,"match: dev: %x:%x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
+
+					for (bus = busses; bus; bus = bus->next) {
+						struct usb_device *dev;
+
+						for (dev = bus->devices; dev; dev = dev->next) {
+							struct usb_device_descriptor *desc = &(dev->descriptor);
+
+							if((desc->idVendor == e->matchTables[i].VendorId) &&
+							   (desc->idProduct == e->matchTables[i].ProductId) &&
+							   (desc->bDeviceClass == e->matchTables[i].bDeviceClass) &&
+							   (desc->bDeviceSubClass == e->matchTables[i].bDeviceSubClass)) {
+							   	struct usb_interface *interface = dev->config->interface;
+								int ai;
+								
+								for (ai = 0; ai < interface->num_altsetting; ai++) {
+									fprintf(stderr, "intclass: %x, intsubclass: %x, intproto: %x\n", interface->altsetting[i].bInterfaceClass, interface->altsetting[i].bInterfaceSubClass, interface->altsetting[i].bInterfaceProtocol);
+									if ((interface->altsetting[i].bInterfaceSubClass == e->matchTables[i].bInterfaceSubClass) &&
+									    (interface->altsetting[i].bInterfaceProtocol == e->matchTables[i].bInterfaceProtocol)){
+										/* TODO: check interfaceClass! */
+										fprintf(stderr,"!!!FOUND DEVICE WITH LIBUSB!!!\n");
+										usb_cable = dev;
+									}
+								}
+							}
+						}
+					}
+				}
 
 				ret = (*ioctl_func) (fd, request, wdioctl);
 
