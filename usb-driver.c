@@ -154,6 +154,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					}
 				} else {
 					struct usb_device_info *udi = (struct usb_device_info*)ugdd->pBuf;
+					struct usb_endpoint_descriptor *ep;
 unsigned char dings[] = {0x12, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x40, 0xfd, 0x03, 0x08, 0x00, 0x00, 0x00, 0x01, 0x02,
 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x38, 0x45, 0x21, 0x08, 0x38, 0x45, 0x21, 0x08,
@@ -210,6 +211,15 @@ unsigned char dings[] = {0x12, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x40, 0xfd, 0
 					udi->Descriptor.iProduct = usb_cable->descriptor.iProduct;
 					udi->Descriptor.iSerialNumber = usb_cable->descriptor.iSerialNumber;
 					udi->Descriptor.bNumConfigurations = usb_cable->descriptor.bNumConfigurations;
+
+					ep = usb_cable->config->interface->altsetting[0].endpoint;
+
+					udi->Pipe0.dwNumber = 0x00;
+					udi->Pipe0.dwMaximumPacketSize = usb_cable->descriptor.bMaxPacketSize0;
+					udi->Pipe0.type = 0;
+					udi->Pipe0.direction = 3;
+					udi->Pipe0.dwInterval = 0;
+					// ab offset 168 config desc
 				}
 #endif
 				if (pSize) {
@@ -382,11 +392,13 @@ int open (const char *pathname, int flags, ...)
 		va_end(args);
 	}
 
-	fd = (*func) (pathname, flags, mode);
-
 	if (!strcmp (pathname, "/dev/windrvr6")) {
 		fprintf(stderr,"opening windrvr6\n");
-		windrvrfd = fd;
+#ifdef USE_LIBUSB
+		windrvrfd = fd = (*func) ("/dev/null", flags, mode);
+#else
+		windrvrfd = fd = (*func) (pathname, flags, mode);
+#endif
 		if (!busses) {
 			usb_init();
 			usb_find_busses();
@@ -394,6 +406,8 @@ int open (const char *pathname, int flags, ...)
 
 			busses = usb_get_busses();
 		}
+	} else {
+		fd = (*func) (pathname, flags, mode);
 	}
 
 	return fd;
