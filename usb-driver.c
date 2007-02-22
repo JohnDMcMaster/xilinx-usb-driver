@@ -88,7 +88,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-				fprintf(stderr," Handle: %lu, Options: %lx, ncmds: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds);
+				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 
 				it->fEnableOk = 1;
 				//ret = (*ioctl_func) (fd, request, wdioctl);
@@ -101,15 +101,11 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-				fprintf(stderr," Handle: %lu, Options: %lx, ncmds: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds);
-
-				hexdump(wdheader->data, wdheader->size);
+				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 				//it->dwCounter = 0;
 				//it->fStopped = 1;
 				ret = (*ioctl_func) (fd, request, wdioctl);
-				fprintf(stderr,"\n\n");
-				hexdump(wdheader->data, wdheader->size);
-				fprintf(stderr,"\n");
+				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 			}
 			break;
 
@@ -172,15 +168,10 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-				fprintf(stderr," Handle: %lu, Options: %lx, ncmds: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds);
+				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 
-				hexdump(wdheader->data, wdheader->size);
 				ret = (*ioctl_func) (fd, request, wdioctl);
-				//ret = 0;
-				//it->dwCounter++;
-				fprintf(stderr,"\n\n");
-				hexdump(wdheader->data, wdheader->size);
-				fprintf(stderr,"\n");
+				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 			}
 			break;
 
