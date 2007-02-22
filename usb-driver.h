@@ -360,3 +360,16 @@ struct usb_device_info_get {
 	WDU_CONFIGURATION cfg;
 
 };
+
+typedef enum {
+	WDU_DIR_IN     = 1,
+	WDU_DIR_OUT    = 2,
+	WDU_DIR_IN_OUT = 3
+} WDU_DIR;
+
+typedef enum {
+	PIPE_TYPE_CONTROL     = 0,
+	PIPE_TYPE_ISOCHRONOUS = 1,
+	PIPE_TYPE_BULK        = 2,
+	PIPE_TYPE_INTERRUPT   = 3
+} USB_PIPE_TYPE;

@@ -32,6 +32,130 @@ static unsigned long card_type;
 void hexdump(unsigned char *buf, int len);
 void diff(unsigned char *buf1, unsigned char *buf2, int len);
 
+int usb_deviceinfo(unsigned char *buf) {
+	int i,j,k,l;
+	int len = 0;
+
+	if (buf) {
+		struct usb_device_info *udi = (struct usb_device_info*)(buf+len);
+
+		udi->Descriptor.bLength = sizeof(WDU_DEVICE_DESCRIPTOR);
+		udi->Descriptor.bDescriptorType = usb_cable->descriptor.bDescriptorType;
+		udi->Descriptor.bcdUSB = usb_cable->descriptor.bcdUSB;
+		udi->Descriptor.bDeviceClass = usb_cable->descriptor.bDeviceClass;
+		udi->Descriptor.bDeviceSubClass = usb_cable->descriptor.bDeviceSubClass;
+		udi->Descriptor.bDeviceProtocol = usb_cable->descriptor.bDeviceProtocol;
+		udi->Descriptor.bMaxPacketSize0 = usb_cable->descriptor.bMaxPacketSize0;
+		udi->Descriptor.idVendor = usb_cable->descriptor.idVendor;
+		udi->Descriptor.idProduct = usb_cable->descriptor.idProduct;
+		udi->Descriptor.bcdDevice = usb_cable->descriptor.bcdDevice;
+		udi->Descriptor.iManufacturer = usb_cable->descriptor.iManufacturer;
+		udi->Descriptor.iProduct = usb_cable->descriptor.iProduct;
+		udi->Descriptor.iSerialNumber = usb_cable->descriptor.iSerialNumber;
+		udi->Descriptor.bNumConfigurations = usb_cable->descriptor.bNumConfigurations;
+
+		/* TODO: Fix Pipe0! */
+		udi->Pipe0.dwNumber = 0x00;
+		udi->Pipe0.dwMaximumPacketSize = usb_cable->descriptor.bMaxPacketSize0;
+		udi->Pipe0.type = 0;
+		udi->Pipe0.direction = 3;
+		udi->Pipe0.dwInterval = 0;
+	}
+
+	len = sizeof(struct usb_device_info);
+
+	for (i=0; i<usb_cable->descriptor.bNumConfigurations; i++)
+	{
+		struct usb_config_descriptor *conf_desc = &usb_cable->config[i];
+		if (buf) {
+			WDU_CONFIGURATION *cfg = (WDU_CONFIGURATION*)(buf+len);
+
+			cfg->Descriptor.bLength = conf_desc->bLength;
+			cfg->Descriptor.bDescriptorType = conf_desc->bDescriptorType;
+			cfg->Descriptor.wTotalLength = conf_desc->wTotalLength;
+			cfg->Descriptor.bNumInterfaces = conf_desc->bNumInterfaces;
+			cfg->Descriptor.bConfigurationValue = conf_desc->bConfigurationValue;
+			cfg->Descriptor.iConfiguration = conf_desc->iConfiguration;
+			cfg->Descriptor.bmAttributes = conf_desc->bmAttributes;
+			cfg->Descriptor.MaxPower = conf_desc->MaxPower;
+
+			cfg->dwNumInterfaces = conf_desc->bNumInterfaces;
+		}
+		len += sizeof(WDU_CONFIGURATION);
+		if (buf) {
+			for (j=0; j<conf_desc->bNumInterfaces; j++) {
+				WDU_INTERFACE *iface = (WDU_INTERFACE*)(buf+len);
+				iface->dwNumAltSettings = usb_cable->config[i].interface[j].num_altsetting;
+
+				len += sizeof(WDU_INTERFACE);
+			}
+		} else {
+			len += sizeof(WDU_INTERFACE) * conf_desc->bNumInterfaces;
+		}
+
+		for (j=0; j<conf_desc->bNumInterfaces; j++)
+		{
+			struct usb_interface *interface = &usb_cable->config[i].interface[j];
+			for(k=0; k<interface->num_altsetting; k++)
+			{
+				unsigned char bNumEndpoints;
+				bNumEndpoints = interface->altsetting[k].bNumEndpoints;
+				if (buf) {
+					WDU_ALTERNATE_SETTING *altset = (WDU_ALTERNATE_SETTING*)(buf+len);
+
+					altset->Descriptor.bLength = interface->altsetting[k].bLength;
+					altset->Descriptor.bDescriptorType = interface->altsetting[k].bDescriptorType;
+					altset->Descriptor.bInterfaceNumber = interface->altsetting[k].bInterfaceNumber;
+					altset->Descriptor.bAlternateSetting = interface->altsetting[k].bAlternateSetting;
+					altset->Descriptor.bNumEndpoints = interface->altsetting[k].bNumEndpoints;
+					altset->Descriptor.bInterfaceClass = interface->altsetting[k].bInterfaceClass;
+					altset->Descriptor.bInterfaceSubClass = interface->altsetting[k].bInterfaceSubClass;
+					altset->Descriptor.bInterfaceProtocol = interface->altsetting[k].bInterfaceProtocol;
+					altset->Descriptor.iInterface = interface->altsetting[k].iInterface;
+
+				}
+				len +=sizeof(WDU_ALTERNATE_SETTING);
+
+				if (buf) {
+					for (l = 0; l < bNumEndpoints; l++) {
+						WDU_ENDPOINT_DESCRIPTOR *ed = (WDU_ENDPOINT_DESCRIPTOR*)(buf+len);
+						WDU_PIPE_INFO *pi;
+
+						ed->bLength = interface->altsetting[k].endpoint[l].bLength;
+						ed->bDescriptorType = interface->altsetting[k].endpoint[l].bDescriptorType;
+						ed->bEndpointAddress = interface->altsetting[k].endpoint[l].bEndpointAddress;
+						ed->bmAttributes = interface->altsetting[k].endpoint[l].bmAttributes;
+						ed->wMaxPacketSize = interface->altsetting[k].endpoint[l].wMaxPacketSize;
+						ed->bInterval = interface->altsetting[k].endpoint[l].bInterval;
+
+						len += sizeof(WDU_ENDPOINT_DESCRIPTOR);
+						
+						pi = (WDU_PIPE_INFO*)(buf+len);
+
+						pi->dwNumber = interface->altsetting[k].endpoint[l].bEndpointAddress;
+						pi->dwMaximumPacketSize = WDU_GET_MAX_PACKET_SIZE(interface->altsetting[k].endpoint[l].wMaxPacketSize);
+						pi->type = interface->altsetting[k].endpoint[l].bmAttributes & USB_ENDPOINT_TYPE_MASK;
+						if (pi->type == PIPE_TYPE_CONTROL)
+							pi->direction = WDU_DIR_IN_OUT;
+						else
+						{
+							pi->direction = interface->altsetting[k].endpoint[l].bEndpointAddress & USB_ENDPOINT_DIR_MASK ?  WDU_DIR_IN : WDU_DIR_OUT;
+						}
+
+						pi->dwInterval = interface->altsetting[k].endpoint[l].bInterval;
+
+						len += sizeof(WDU_PIPE_INFO);
+					}
+				} else {
+					len +=(sizeof(WDU_ENDPOINT_DESCRIPTOR)+sizeof(WDU_PIPE_INFO))*bNumEndpoints;
+				}
+			}
+		}
+	}
+
+	return len;
+}
+
 int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	struct header_struct* wdheader = (struct header_struct*)wdioctl;
 	struct version_struct *version;
@@ -140,60 +264,14 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 				fprintf(stderr, "unique: %lu, bytes: %lu, options: %lx\n", ugdd->dwUniqueID, ugdd->dwBytes, ugdd->dwOptions);
 				pSize = ugdd->dwBytes;
-				if (pSize) {
-					hexdump(ugdd->pBuf, pSize);
-				}
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
 				if (!ugdd->dwBytes) {
 					if (usb_cable) {
-						int i,j,k;
-						ugdd->dwBytes = sizeof(struct usb_device_info);
-
-						for (i=0; i<usb_cable->descriptor.bNumConfigurations; i++)
-						{
-							struct usb_config_descriptor *conf_desc = &usb_cable->config[i];
-							ugdd->dwBytes+=sizeof(WDU_CONFIGURATION);
-							ugdd->dwBytes+=sizeof(WDU_INTERFACE) * conf_desc->bNumInterfaces;
-
-							for (j=0; j<conf_desc->bNumInterfaces; j++)
-							{
-								struct usb_interface *interface = &usb_cable->config[i].interface[j];
-								for(k=0; k<interface->num_altsetting; k++)
-								{
-									unsigned char bNumEndpoints;
-									bNumEndpoints = interface->altsetting[k].bNumEndpoints;
-									ugdd->dwBytes+=sizeof(WDU_ALTERNATE_SETTING);
-									ugdd->dwBytes+=(sizeof(WDU_ENDPOINT_DESCRIPTOR)+sizeof(WDU_PIPE_INFO))*bNumEndpoints;
-								}
-							}
-						}
-
-						
+						ugdd->dwBytes = usb_deviceinfo(NULL);
 					}
 				} else {
-					struct usb_device_info_get *udi = (struct usb_device_info_get*)ugdd->pBuf;
-					struct usb_endpoint_descriptor *ep;
-unsigned char dings[] = {0x12, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x40, 0xfd, 0x03, 0x08, 0x00, 0x00, 0x00, 0x01, 0x02,
-0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x38, 0x45, 0x21, 0x08, 0x38, 0x45, 0x21, 0x08,
-0x4c, 0x45, 0x21, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x02, 0x20, 0x00, 0x01, 0x02, 0x00, 0x80,
-0x8c, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x4c, 0x45, 0x21, 0x08, 0x58, 0x45, 0x21, 0x08,
-0x01, 0x00, 0x00, 0x00, 0x58, 0x45, 0x21, 0x08, 0x09, 0x04, 0x00, 0x00, 0x02, 0xff, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x6c, 0x45, 0x21, 0x08, 0x7c, 0x45, 0x21, 0x08, 0x07, 0x05, 0x02, 0x02,
-0x00, 0x02, 0x00, 0x00, 0x07, 0x05, 0x86, 0x02, 0x00, 0x02, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
-0x00, 0x02, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x86, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00};
-
 //unique: 94, bytes: 276, options: 0
 //Vendor: 3fd
 //12 01 00 02 00 00 00 40 fd 03 08 00 00 00 01 02                              12 01 00 02 00 00 00 40 fd 03 08 00 00 00 01 02
@@ -215,41 +293,7 @@ unsigned char dings[] = {0x12, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x40, 0xfd, 0
 //86 00 00 00 00 02 00 00 02 00 00 00 01 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 //00 00 00 00                                                                  00 00 00 00
 
-					bzero(udi, ugdd->dwBytes);
-					//memcpy(udi, dings, 276);
-					udi->Descriptor.bLength = sizeof(WDU_DEVICE_DESCRIPTOR);
-					udi->Descriptor.bDescriptorType = usb_cable->descriptor.bDescriptorType;
-					udi->Descriptor.bcdUSB = usb_cable->descriptor.bcdUSB;
-					udi->Descriptor.bDeviceClass = usb_cable->descriptor.bDeviceClass;
-					udi->Descriptor.bDeviceSubClass = usb_cable->descriptor.bDeviceSubClass;
-					udi->Descriptor.bDeviceProtocol = usb_cable->descriptor.bDeviceProtocol;
-					udi->Descriptor.bMaxPacketSize0 = usb_cable->descriptor.bMaxPacketSize0;
-					udi->Descriptor.idVendor = usb_cable->descriptor.idVendor;
-					udi->Descriptor.idProduct = usb_cable->descriptor.idProduct;
-					udi->Descriptor.bcdDevice = usb_cable->descriptor.bcdDevice;
-					udi->Descriptor.iManufacturer = usb_cable->descriptor.iManufacturer;
-					udi->Descriptor.iProduct = usb_cable->descriptor.iProduct;
-					udi->Descriptor.iSerialNumber = usb_cable->descriptor.iSerialNumber;
-					udi->Descriptor.bNumConfigurations = usb_cable->descriptor.bNumConfigurations;
-
-					ep = usb_cable->config->interface->altsetting[0].endpoint;
-
-					udi->Pipe0.dwNumber = 0x00;
-					udi->Pipe0.dwMaximumPacketSize = usb_cable->descriptor.bMaxPacketSize0;
-					udi->Pipe0.type = 0;
-					udi->Pipe0.direction = 3;
-					udi->Pipe0.dwInterval = 0;
-
-					udi->cfg.Descriptor.bLength = usb_cable->config->bLength;
-					udi->cfg.Descriptor.bDescriptorType = usb_cable->config->bDescriptorType;
-					udi->cfg.Descriptor.wTotalLength = usb_cable->config->wTotalLength;
-					udi->cfg.Descriptor.bNumInterfaces = usb_cable->config->bNumInterfaces;
-					udi->cfg.Descriptor.bConfigurationValue = usb_cable->config->bConfigurationValue;
-					udi->cfg.Descriptor.iConfiguration = usb_cable->config->iConfiguration;
-					udi->cfg.Descriptor.bmAttributes = usb_cable->config->bmAttributes;
-					udi->cfg.Descriptor.MaxPower = usb_cable->config->MaxPower;
-
-					// ab offset 168 config desc
+					usb_deviceinfo((unsigned char*)ugdd->pBuf);
 				}
 #endif
 				if (pSize) {
