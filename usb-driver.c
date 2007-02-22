@@ -18,109 +18,200 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <stdio.h>
+#include "xilinx.h"
 
 #define SNIFFLEN 4096
+static unsigned char lastbuf[4096];
 
 void hexdump(unsigned char *buf, int len);
-
-struct header_struct {
-	unsigned long dwHeader;
-	void* data;
-	unsigned long dwSize;
-};
-
-struct version_struct {
-	unsigned long versionul;
-	char version[128];
-};
-
-struct license_struct {
-    char cLicense[128]; // Buffer with license string to put.
-                      // If empty string then get current license setting
-                      // into dwLicense.
-    unsigned long dwLicense;  // Returns license settings: LICENSE_DEMO, LICENSE_WD
-                      // etc..., or 0 for invalid license.
-    unsigned long dwLicense2; // Returns additional license settings, if dwLicense
-                      // could not hold all the information.
-                      // Then dwLicense will return 0.
-};
-
-#define WD_IOCTL_HEADER_CODE 0xa410b413UL
+void diff(unsigned char *buf1, unsigned char *buf2, int len);
 
 void parse_wdioctlreq(unsigned char *wdioctl, unsigned int request) {
 	struct header_struct* wdheader = (struct header_struct*)wdioctl;
 
-	if (wdheader->dwHeader != WD_IOCTL_HEADER_CODE) {
+	if (wdheader->magic != MAGIC) {
 		fprintf(stderr,"!!!ERROR: Header does not match!!!\n");
 		return;
 	}
 
 	fprintf(stderr, "Request: ");
 	switch(request) {
-		case 0x910:
-			fprintf(stderr,"IOCTL_WD_VERSION");
-			//fprintf(stderr," %s(%d)", ((struct version_struct*)(wdheader->data))->version, ((struct version_struct*)(wdheader->data))->versionul);
+		case VERSION:
+			fprintf(stderr,"VERSION");
 			break;
-		case 0x952:
-			fprintf(stderr,"IOCTL_WD_LICENSE");
+		case LICENSE:
+			fprintf(stderr,"LICENSE");
+			fprintf(stderr," \"%s\" (XX,XX)", ((struct license_struct*)(wdheader->data))->cLicense);
 			break;
-		case 0x98c:
-			fprintf(stderr,"IOCTL_WD_TRANSFER");
+		case TRANSFER:
+			fprintf(stderr,"TRANSFER");
 			break;
-		case 0x983:
-			fprintf(stderr,"IOCTL_WDU_TRANSFER");
+		case USB_TRANSFER:
+			fprintf(stderr,"USB_TRANSFER");
+		#if 0
+			{
+				struct usb_transfer *ut = (struct usb_transfer*)(wdheader->data);
+
+				fprintf(stderr," unique: %d, pipe: %d, read: %d, options: %x, size: %d, timeout: %x\n", ut->dwUniqueID, ut->dwPipeNum, ut->fRead, ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
+				memcpy(lastbuf, ut->pBuffer, ut->dwBufferSize);
+				hexdump(ut->pBuffer, ut->dwBufferSize);
+				fprintf(stderr,"\n");
+			}
+			fprintf(stderr,"\n");
+#endif
 			break;
-		case 0x987:
-			fprintf(stderr,"IOCTL_WD_EVENT_UNREGISTER");
+		case EVENT_UNREGISTER:
+			fprintf(stderr,"EVENT_UNREGISTER");
 			break;
-		case 0x91f:
-			fprintf(stderr,"IOCTL_WD_INT_DISABLE");
+		case INT_DISABLE:
+			fprintf(stderr,"INT_DISABLE");
 			break;
-		case 0x94b:
-			fprintf(stderr,"IOCTL_WD_INT_WAIT");
+		case INT_WAIT:
+			fprintf(stderr,"INT_WAIT");
 			break;
-		case 0x92b:
-			fprintf(stderr,"IOCTL_WD_CARD_UNREGISTER");
+		case CARD_UNREGISTER:
+			fprintf(stderr,"CARD_UNREGISTER");
 			break;
-		case 0x9a7:
-			fprintf(stderr,"IOCTL_WDU_GET_DEVICE_DATA");
+		case USB_GET_DEVICE_DATA:
+			fprintf(stderr,"USB_GET_DEVICE_DATA");
 			break;
-		case 0x98e:
-			fprintf(stderr,"IOCTL_WD_INT_ENABLE");
+		case INT_ENABLE:
+			fprintf(stderr,"INT_ENABLE");
 			break;
-		case 0x988:
-			fprintf(stderr,"IOCTL_WD_EVENT_PULL");
+		case EVENT_PULL:
+			fprintf(stderr,"EVENT_PULL");
 			break;
-		case 0x981:
-			fprintf(stderr,"IOCTL_WDU_SET_INTERFACE");
+		case USB_SET_INTERFACE:
+			fprintf(stderr,"USB_SET_INTERFACE");
+			break;
+		case EVENT_REGISTER:
+			{
+				struct event *e = (struct event*)(wdheader->data);
+				fprintf(stderr,"%x:%x ", e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId);
+				fprintf(stderr,"match: %04x:%04x\n", e->matchTables[0].VendorId, e->matchTables[0].ProductId);
+			}
+			memcpy(lastbuf, wdheader->data, wdheader->size);
+			fprintf(stderr,"EVENT_REGISTER");
+			break;
+		case CARD_REGISTER:
 			break;
 		default:
+			memcpy(lastbuf, wdheader->data, wdheader->size);
+			fprintf(stderr,"\n");
+			hexdump(wdheader->data, wdheader->size);
+			fprintf(stderr,"\n");
 			fprintf(stderr,"Unknown(%x)",request);
 	}
 
-	fprintf(stderr, ", size: %d\n", wdheader->dwSize);
+	fprintf(stderr, ", size: %d\n", wdheader->size);
 }
 
 void parse_wdioctlans(unsigned char *wdioctl, unsigned int request, int result) {
 	struct header_struct* wdheader = (struct header_struct*)wdioctl;
 
-	if (wdheader->dwHeader != WD_IOCTL_HEADER_CODE) {
+	if (wdheader->magic != MAGIC) {
 		fprintf(stderr,"!!!ERROR: Header does not match!!!\n");
 		return;
 	}
 
 	fprintf(stderr, "Answer: %d ", result);
 	switch(request) {
-		case 0x910:
+		case VERSION:
 			fprintf(stderr,"\"%s\" (%d)", ((struct version_struct*)(wdheader->data))->version, ((struct version_struct*)(wdheader->data))->versionul);
 			break;
-		case 0x952:
+		case LICENSE:
 			fprintf(stderr,"\"%s\" (XX,XX)", ((struct license_struct*)(wdheader->data))->cLicense);
 			break;
+		case TRANSFER:
+		case EVENT_UNREGISTER:
+		case INT_DISABLE:
+		case INT_WAIT:
+		case CARD_UNREGISTER:
+		case USB_GET_DEVICE_DATA:
+		case INT_ENABLE:
+		case EVENT_PULL:
+		case USB_SET_INTERFACE:
+		case CARD_REGISTER:
+			break;
+		case EVENT_REGISTER:
+			fprintf(stderr,"\n");
+			diff(lastbuf, wdheader->data, wdheader->size);
+			break;
+		case USB_TRANSFER:
+		#if 0
+			{
+				struct usb_transfer *ut = (struct usb_transfer*)(wdheader->data);
+
+				fprintf(stderr,"\n");
+				hexdump(ut->pBuffer, ut->dwBufferSize);
+				fprintf(stderr,"\n");
+				diff(lastbuf, ut->pBuffer, ut->dwBufferSize);
+			}
+		#endif
+			break;
 		default:
+			fprintf(stderr,"\n");
+			hexdump(wdheader->data, wdheader->size);
+			fprintf(stderr,"\n");
+			diff(lastbuf, wdheader->data, wdheader->size);
 			break;
 	}
-	fprintf(stderr, "\n");
+	fprintf(stderr, ", size: %d\n", wdheader->size);
+}
+
+int do_wdioctl(unsigned int request, unsigned char *wdioctl) {
+	struct header_struct* wdheader = (struct header_struct*)wdioctl;
+	struct version_struct *version;
+
+	if (wdheader->magic != MAGIC) {
+		fprintf(stderr,"!!!ERROR: Header does not match!!!\n");
+		return;
+	}
+
+	switch(request) {
+		case VERSION:
+			version = (struct version_struct*)(wdheader->data);
+			strcpy(version->version, "WinDriver no more");
+			version->versionul = 999;
+			fprintf(stderr,"faking VERSION\n");
+			break;
+		case CARD_REGISTER:
+			{
+				struct card_register* cr = (struct card_register*)(wdheader->data);
+				/* Todo: LPT-Port already in use */
+			}
+			fprintf(stderr,"faking CARD_REGISTER\n");
+			break;
+		case USB_TRANSFER:
+			fprintf(stderr,"in USB_TRANSFER");
+			{
+				struct usb_transfer *ut = (struct usb_transfer*)(wdheader->data);
+
+				fprintf(stderr," unique: %d, pipe: %d, read: %d, options: %x, size: %d, timeout: %x\n", ut->dwUniqueID, ut->dwPipeNum, ut->fRead, ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
+				fprintf(stderr,"setup packet: ");
+				hexdump(ut->SetupPacket, 8);
+				if (!ut->fRead && ut->dwBufferSize)
+				{
+					hexdump(ut->pBuffer, ut->dwBufferSize);
+					fprintf(stderr,"\n");
+				}
+			}
+		case LICENSE:
+		case TRANSFER:
+		case EVENT_UNREGISTER:
+		case INT_DISABLE:
+		case INT_WAIT:
+		case CARD_UNREGISTER:
+		case USB_GET_DEVICE_DATA:
+		case INT_ENABLE:
+		case EVENT_PULL:
+		case USB_SET_INTERFACE:
+		case EVENT_REGISTER:
+		default:
+			return -1;
+	}
+
+	return 0;
 }
 
 
@@ -181,7 +272,6 @@ int ioctl(int fd, int request, ...)
 	static int (*func) (int, int, void *) = NULL;
 	va_list args;
 	void *argp;
-	unsigned char prebuf[SNIFFLEN];
 	int ret;
 
 	if (!func)                                                                    
@@ -192,11 +282,13 @@ int ioctl(int fd, int request, ...)
 	va_end (args);
 
 	if (fd == windrvrfd) {
-		memcpy(prebuf, argp, SNIFFLEN);
 		parse_wdioctlreq(argp, request);
-	}
 
-	ret = (*func) (fd, request, argp);
+		if ((ret = do_wdioctl(request, argp)))
+			ret = (*func) (fd, request, argp);
+	} else {
+		ret = (*func) (fd, request, argp);
+	}
 
 	if (fd == windrvrfd) {
 		parse_wdioctlans(argp, request, ret);
@@ -204,6 +296,7 @@ int ioctl(int fd, int request, ...)
 	return ret;
 }
 
+#if 0
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	static void* (*func) (void *, size_t, int, int, int, off_t) = NULL;
@@ -266,6 +359,7 @@ void *malloc(size_t size)
 
 	return ret;
 }
+#endif
 
 
 #endif
