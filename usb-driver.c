@@ -438,7 +438,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					if (it->dwCounter == 0) {
 						it->dwCounter = 1;
 					} else {
-						//FIXME: signal 
+						//FIXME: signal durch FUTEX, overload futex!
 						kill(getpid(), SIGHUP);
 					}
 				} else {
