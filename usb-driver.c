@@ -138,16 +138,21 @@ void parse_wdioctlans(unsigned char *wdioctl, unsigned int request, int result) 
 			diff(lastbuf, wdheader->data, wdheader->size);
 			break;
 		case USB_TRANSFER:
-		#if 0
 			{
 				struct usb_transfer *ut = (struct usb_transfer*)(wdheader->data);
 
-				fprintf(stderr,"\n");
+				fprintf(stderr,"\nTransferred: %d (%s)",ut->dwBytesTransferred, (ut->fRead?"read":"write"));
+				if (ut->fRead && ut->dwBytesTransferred)
+				{
+					fprintf(stderr,"\nRead: ");
+					hexdump(ut->pBuffer, ut->dwBytesTransferred);
+				}
+				#if 0
 				hexdump(ut->pBuffer, ut->dwBufferSize);
 				fprintf(stderr,"\n");
 				diff(lastbuf, ut->pBuffer, ut->dwBufferSize);
+				#endif
 			}
-		#endif
 			break;
 		default:
 			fprintf(stderr,"\n");
@@ -156,7 +161,7 @@ void parse_wdioctlans(unsigned char *wdioctl, unsigned int request, int result) 
 			diff(lastbuf, wdheader->data, wdheader->size);
 			break;
 	}
-	fprintf(stderr, ", size: %d\n", wdheader->size);
+	fprintf(stderr, "\n", wdheader->size);
 }
 
 int do_wdioctl(unsigned int request, unsigned char *wdioctl) {
