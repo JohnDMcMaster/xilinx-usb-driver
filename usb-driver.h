@@ -350,3 +350,11 @@ struct usb_device_info {
 	WDU_CONFIGURATION *pActiveConfig;
 	WDU_INTERFACE *pActiveInterface[WD_USB_MAX_INTERFACES];
 };
+
+struct usb_device_info_get {
+	WDU_DEVICE_DESCRIPTOR Descriptor;
+	WDU_PIPE_INFO Pipe0;
+	unsigned char dummy[128];
+	WDU_CONFIGURATION cfg;
+
+};

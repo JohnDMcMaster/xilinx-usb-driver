@@ -27,7 +27,7 @@ static struct usb_bus *busses = NULL;
 static struct usb_device *usb_cable;
 static unsigned long card_type;
 
-//#define USE_LIBUSB 1
+#define USE_LIBUSB 1
 
 void hexdump(unsigned char *buf, int len);
 void diff(unsigned char *buf1, unsigned char *buf2, int len);
@@ -153,7 +153,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 						ugdd->dwBytes = 276;
 					}
 				} else {
-					struct usb_device_info *udi = (struct usb_device_info*)ugdd->pBuf;
+					struct usb_device_info_get *udi = (struct usb_device_info_get*)ugdd->pBuf;
 					struct usb_endpoint_descriptor *ep;
 unsigned char dings[] = {0x12, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x40, 0xfd, 0x03, 0x08, 0x00, 0x00, 0x00, 0x01, 0x02,
 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -219,6 +219,16 @@ unsigned char dings[] = {0x12, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x40, 0xfd, 0
 					udi->Pipe0.type = 0;
 					udi->Pipe0.direction = 3;
 					udi->Pipe0.dwInterval = 0;
+
+					udi->cfg.Descriptor.bLength = usb_cable->config->bLength;
+					udi->cfg.Descriptor.bDescriptorType = usb_cable->config->bDescriptorType;
+					udi->cfg.Descriptor.wTotalLength = usb_cable->config->wTotalLength;
+					udi->cfg.Descriptor.bNumInterfaces = usb_cable->config->bNumInterfaces;
+					udi->cfg.Descriptor.bConfigurationValue = usb_cable->config->bConfigurationValue;
+					udi->cfg.Descriptor.iConfiguration = usb_cable->config->iConfiguration;
+					udi->cfg.Descriptor.bmAttributes = usb_cable->config->bmAttributes;
+					udi->cfg.Descriptor.MaxPower = usb_cable->config->MaxPower;
+
 					// ab offset 168 config desc
 				}
 #endif
