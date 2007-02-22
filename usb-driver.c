@@ -25,6 +25,9 @@ static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = 0;
 static struct usb_bus *busses = NULL;
 static struct usb_device *usb_cable;
+static unsigned long card_type;
+
+#define USE_LIBUSB 1
 
 void hexdump(unsigned char *buf, int len);
 void diff(unsigned char *buf1, unsigned char *buf2, int len);
@@ -74,7 +77,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					fprintf(stderr,"\n");
 				}
 
+#ifndef USE_LIBUSB
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
 
 				fprintf(stderr,"Transferred: %lu (%s)\n",ut->dwBytesTransferred, (ut->fRead?"read":"write"));
 				if (ut->fRead && ut->dwBytesTransferred)
@@ -107,7 +112,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 				//it->dwCounter = 0;
 				//it->fStopped = 1;
+#ifndef USE_LIBUSB
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 			}
 			break;
@@ -118,7 +125,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				struct usb_set_interface *usi = (struct usb_set_interface*)(wdheader->data);
 
 				fprintf(stderr,"unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n", usi->dwUniqueID, usi->dwInterfaceNum, usi->dwAlternateSetting, usi->dwOptions);
+#ifndef USE_LIBUSB
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
 			}
 			break;
 
@@ -130,7 +139,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 				fprintf(stderr, "uniqe: %lu, bytes: %lu, options: %lx\n", ugdd->dwUniqueID, ugdd->dwBytes, ugdd->dwOptions);
 				pSize = ugdd->dwBytes;
+#ifndef USE_LIBUSB
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
 				if (pSize) {
 					hexdump(ugdd->pBuf, pSize);
 					fprintf(stderr, "\n");
@@ -169,6 +180,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 										/* TODO: check interfaceClass! */
 										fprintf(stderr,"!!!FOUND DEVICE WITH LIBUSB!!!\n");
 										usb_cable = dev;
+										card_type = e->dwCardType;
 									}
 								}
 							}
@@ -176,7 +188,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					}
 				}
 
+#ifndef USE_LIBUSB
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
 
 				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
 				for (i = 0; i < e->dwNumMatchTables; i++)
@@ -186,12 +200,16 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 		case TRANSFER:
 			fprintf(stderr,"TRANSFER\n");
+#ifndef USE_LIBUSB
 			ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
 			break;
 
 		case EVENT_UNREGISTER:
 			fprintf(stderr,"EVENT_UNREGISTER\n");
+#ifndef USE_LIBUSB
 			ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
 			break;
 
 		case INT_WAIT:
@@ -201,14 +219,22 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 
+#ifndef USE_LIBUSB
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+				if (usb_cable)
+					it->dwCounter++;
+#endif
+
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 			}
 			break;
 
 		case CARD_UNREGISTER:
 			fprintf(stderr,"CARD_UNREGISTER\n");
+#ifndef USE_LIBUSB
 			ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
 			break;
 
 		case EVENT_PULL:
@@ -221,7 +247,30 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				for (i = 0; i < e->dwNumMatchTables; i++)
 					fprintf(stderr,"match: dev: %x:%x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
 
+#ifndef USE_LIBUSB
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+//EVENT_PULL
+//handle: 1, action: 0, status: 0, eventid: 0, cardtype: 0, kplug: 0, options: 0, dev: 0:0, unique: 0, ver: 1, nummatch: 1
+//match: dev: 0:0, class: 0, subclass: 0, intclass: 0, intsubclass: 0, intproto: 0
+//handle: 1, action: 1, status: 0, eventid: 109, cardtype: 4294967294, kplug: 0, options: 0, dev: 0:0, unique: 90, ver: 1, nummatch: 1
+//match: dev: 3fd:8, class: 0, subclass: 0, intclass: ff, intsubclass: 0, intproto: 0
+				if (usb_cable) {
+					struct usb_interface *interface = usb_cable->config->interface;
+
+					e->dwCardType = card_type;
+					e->dwAction = 1;
+					e->dwEventId = 109;
+					e->u.Usb.dwUniqueID = 4711;
+					e->matchTables[0].VendorId = usb_cable->descriptor.idVendor;
+					e->matchTables[0].ProductId = usb_cable->descriptor.idProduct;
+					e->matchTables[0].bDeviceClass = usb_cable->descriptor.bDeviceClass;
+					e->matchTables[0].bDeviceSubClass = usb_cable->descriptor.bDeviceSubClass;
+					e->matchTables[0].bInterfaceClass = interface->altsetting[0].bInterfaceClass;
+					e->matchTables[0].bInterfaceSubClass = interface->altsetting[0].bInterfaceSubClass;
+					e->matchTables[0].bInterfaceProtocol = interface->altsetting[0].bInterfaceProtocol;
+				}
+#endif
 
 				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
 				for (i = 0; i < e->dwNumMatchTables; i++)
@@ -230,7 +279,11 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			break;
 
 		default:
+			fprintf(stderr,"!!!Unsupported IOCTL: %x!!!\n", request);
+#ifndef USE_LIBUSB
 			ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
+			break;
 	}
 
 	return ret;
