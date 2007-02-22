@@ -15,6 +15,8 @@
 
 #define MAGIC 0xa410b413UL
 
+/* http://www.jungo.com/support/documentation/windriver/811/wdusb_man_mhtml/node78.html#SECTION001734000000000000000 */
+
 struct header_struct {
 	unsigned long magic;
 	void* data;
@@ -200,3 +202,152 @@ struct card_register
 	char cName[32];         // Name of card.
 	char cDescription[100]; // Description.
 };
+
+typedef struct
+{
+	void* dwPort;       // IO port for transfer or kernel memory address.
+	unsigned long cmdTrans;    // Transfer command WD_TRANSFER_CMD.
+
+	// Parameters used for string transfers:
+	unsigned long dwBytes;     // For string transfer.
+	unsigned long fAutoinc;    // Transfer from one port/address
+	// or use incremental range of addresses.
+	unsigned long dwOptions;   // Must be 0.
+	union
+	{
+		unsigned char Byte;     // Use for 8 bit transfer.
+		unsigned short Word;     // Use for 16 bit transfer.
+		unsigned int Dword;   // Use for 32 bit transfer.
+		unsigned long long Qword;  // Use for 64 bit transfer.
+		void* pBuffer; // Use for string transfer.
+	} Data;
+} WD_TRANSFER, WD_TRANSFER_V61;
+
+typedef struct
+{
+	unsigned long hKernelPlugIn;
+	unsigned long dwMessage;
+	void* pData;
+	unsigned long dwResult;
+} WD_KERNEL_PLUGIN_CALL, WD_KERNEL_PLUGIN_CALL_V40;
+
+
+struct interrupt
+{
+	unsigned long hInterrupt;    // Handle of interrupt.
+	unsigned long dwOptions;     // Interrupt options: can be INTERRUPT_CMD_COPY
+
+	WD_TRANSFER *Cmd;    // Commands to do on interrupt.
+	unsigned long dwCmds;        // Number of commands.
+
+	// For WD_IntEnable():
+	WD_KERNEL_PLUGIN_CALL kpCall; // Kernel PlugIn call.
+	unsigned long fEnableOk;     // TRUE if interrupt was enabled (WD_IntEnable() succeed).
+
+	// For WD_IntWait() and WD_IntCount():
+	unsigned long dwCounter;     // Number of interrupts received.
+	unsigned long dwLost;        // Number of interrupts not yet dealt with.
+	unsigned long fStopped;      // Was interrupt disabled during wait.
+};
+
+struct usb_set_interface
+{
+	unsigned long dwUniqueID;
+	unsigned long dwInterfaceNum;
+	unsigned long dwAlternateSetting;
+	unsigned long dwOptions;
+};
+
+struct usb_get_device_data
+{
+	unsigned long dwUniqueID;
+	void* pBuf;
+	unsigned long dwBytes;
+	unsigned long dwOptions;
+};
+
+#define WD_USB_MAX_INTERFACES 30
+
+typedef struct
+{
+	unsigned char bLength;
+	unsigned char bDescriptorType;
+	unsigned char bInterfaceNumber;
+	unsigned char bAlternateSetting;
+	unsigned char bNumEndpoints;
+	unsigned char bInterfaceClass;
+	unsigned char bInterfaceSubClass;
+	unsigned char bInterfaceProtocol;
+	unsigned char iInterface;
+} WDU_INTERFACE_DESCRIPTOR;
+
+typedef struct
+{
+	unsigned char bLength;
+	unsigned char bDescriptorType;
+	unsigned char bEndpointAddress;
+	unsigned char bmAttributes;
+	unsigned short wMaxPacketSize;
+	unsigned char bInterval;
+} WDU_ENDPOINT_DESCRIPTOR;
+
+typedef struct
+{
+	unsigned char bLength;
+	unsigned char bDescriptorType;
+	unsigned short wTotalLength;
+	unsigned char bNumInterfaces;
+	unsigned char bConfigurationValue;
+	unsigned char iConfiguration;
+	unsigned char bmAttributes;
+	unsigned char MaxPower;
+} WDU_CONFIGURATION_DESCRIPTOR;
+
+typedef struct
+{
+	unsigned char bLength;
+	unsigned char bDescriptorType;
+	unsigned short bcdUSB;
+	unsigned char bDeviceClass;
+	unsigned char bDeviceSubClass;
+	unsigned char bDeviceProtocol;
+	unsigned char bMaxPacketSize0;
+
+	unsigned short idVendor;
+	unsigned short idProduct;
+	unsigned short bcdDevice;
+	unsigned char iManufacturer;
+	unsigned char iProduct;
+	unsigned char iSerialNumber;
+	unsigned char bNumConfigurations;
+} WDU_DEVICE_DESCRIPTOR;
+
+typedef struct
+{
+	WDU_INTERFACE_DESCRIPTOR Descriptor;
+	WDU_ENDPOINT_DESCRIPTOR *pEndpointDescriptors;
+	WDU_PIPE_INFO *pPipes;
+} WDU_ALTERNATE_SETTING;
+
+typedef struct
+{
+	WDU_ALTERNATE_SETTING *pAlternateSettings;
+	unsigned long dwNumAltSettings;
+	WDU_ALTERNATE_SETTING *pActiveAltSetting;
+} WDU_INTERFACE;
+
+typedef struct
+{
+	WDU_CONFIGURATION_DESCRIPTOR Descriptor;
+	unsigned long dwNumInterfaces;
+	WDU_INTERFACE *pInterfaces;
+} WDU_CONFIGURATION;
+
+struct wdu_device_info {
+	WDU_DEVICE_DESCRIPTOR Descriptor;
+	WDU_PIPE_INFO Pipe0;
+	WDU_CONFIGURATION *pConfigs;
+	WDU_CONFIGURATION *pActiveConfig;
+	WDU_INTERFACE *pActiveInterface[WD_USB_MAX_INTERFACES];
+};
+

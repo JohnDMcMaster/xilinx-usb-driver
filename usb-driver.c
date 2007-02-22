@@ -22,151 +22,15 @@
 
 #define SNIFFLEN 4096
 static unsigned char lastbuf[4096];
+static int (*ioctl_func) (int, int, void *) = NULL;
 
 void hexdump(unsigned char *buf, int len);
 void diff(unsigned char *buf1, unsigned char *buf2, int len);
 
-void parse_wdioctlreq(unsigned char *wdioctl, unsigned int request) {
-	struct header_struct* wdheader = (struct header_struct*)wdioctl;
-
-	if (wdheader->magic != MAGIC) {
-		fprintf(stderr,"!!!ERROR: Header does not match!!!\n");
-		return;
-	}
-
-	fprintf(stderr, "Request: ");
-	switch(request) {
-		case VERSION:
-			fprintf(stderr,"VERSION");
-			break;
-		case LICENSE:
-			fprintf(stderr,"LICENSE");
-			fprintf(stderr," \"%s\" (XX,XX)", ((struct license_struct*)(wdheader->data))->cLicense);
-			break;
-		case TRANSFER:
-			fprintf(stderr,"TRANSFER");
-			break;
-		case USB_TRANSFER:
-			fprintf(stderr,"USB_TRANSFER");
-		#if 0
-			{
-				struct usb_transfer *ut = (struct usb_transfer*)(wdheader->data);
-
-				fprintf(stderr," unique: %d, pipe: %d, read: %d, options: %x, size: %d, timeout: %x\n", ut->dwUniqueID, ut->dwPipeNum, ut->fRead, ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
-				memcpy(lastbuf, ut->pBuffer, ut->dwBufferSize);
-				hexdump(ut->pBuffer, ut->dwBufferSize);
-				fprintf(stderr,"\n");
-			}
-			fprintf(stderr,"\n");
-#endif
-			break;
-		case EVENT_UNREGISTER:
-			fprintf(stderr,"EVENT_UNREGISTER");
-			break;
-		case INT_DISABLE:
-			fprintf(stderr,"INT_DISABLE");
-			break;
-		case INT_WAIT:
-			fprintf(stderr,"INT_WAIT");
-			break;
-		case CARD_UNREGISTER:
-			fprintf(stderr,"CARD_UNREGISTER");
-			break;
-		case USB_GET_DEVICE_DATA:
-			fprintf(stderr,"USB_GET_DEVICE_DATA");
-			break;
-		case INT_ENABLE:
-			fprintf(stderr,"INT_ENABLE");
-			break;
-		case EVENT_PULL:
-			fprintf(stderr,"EVENT_PULL");
-			break;
-		case USB_SET_INTERFACE:
-			fprintf(stderr,"USB_SET_INTERFACE");
-			break;
-		case EVENT_REGISTER:
-			{
-				struct event *e = (struct event*)(wdheader->data);
-				fprintf(stderr,"%x:%x ", e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId);
-				fprintf(stderr,"match: %04x:%04x\n", e->matchTables[0].VendorId, e->matchTables[0].ProductId);
-			}
-			memcpy(lastbuf, wdheader->data, wdheader->size);
-			fprintf(stderr,"EVENT_REGISTER");
-			break;
-		case CARD_REGISTER:
-			break;
-		default:
-			memcpy(lastbuf, wdheader->data, wdheader->size);
-			fprintf(stderr,"\n");
-			hexdump(wdheader->data, wdheader->size);
-			fprintf(stderr,"\n");
-			fprintf(stderr,"Unknown(%x)",request);
-	}
-
-	fprintf(stderr, ", size: %d\n", wdheader->size);
-}
-
-void parse_wdioctlans(unsigned char *wdioctl, unsigned int request, int result) {
-	struct header_struct* wdheader = (struct header_struct*)wdioctl;
-
-	if (wdheader->magic != MAGIC) {
-		fprintf(stderr,"!!!ERROR: Header does not match!!!\n");
-		return;
-	}
-
-	fprintf(stderr, "Answer: %d ", result);
-	switch(request) {
-		case VERSION:
-			fprintf(stderr,"\"%s\" (%d)", ((struct version_struct*)(wdheader->data))->version, ((struct version_struct*)(wdheader->data))->versionul);
-			break;
-		case LICENSE:
-			fprintf(stderr,"\"%s\" (XX,XX)", ((struct license_struct*)(wdheader->data))->cLicense);
-			break;
-		case TRANSFER:
-		case EVENT_UNREGISTER:
-		case INT_DISABLE:
-		case INT_WAIT:
-		case CARD_UNREGISTER:
-		case USB_GET_DEVICE_DATA:
-		case INT_ENABLE:
-		case EVENT_PULL:
-		case USB_SET_INTERFACE:
-		case CARD_REGISTER:
-			break;
-		case EVENT_REGISTER:
-			fprintf(stderr,"\n");
-			diff(lastbuf, wdheader->data, wdheader->size);
-			break;
-		case USB_TRANSFER:
-			{
-				struct usb_transfer *ut = (struct usb_transfer*)(wdheader->data);
-
-				fprintf(stderr,"\nTransferred: %d (%s)",ut->dwBytesTransferred, (ut->fRead?"read":"write"));
-				if (ut->fRead && ut->dwBytesTransferred)
-				{
-					fprintf(stderr,"\nRead: ");
-					hexdump(ut->pBuffer, ut->dwBytesTransferred);
-				}
-				#if 0
-				hexdump(ut->pBuffer, ut->dwBufferSize);
-				fprintf(stderr,"\n");
-				diff(lastbuf, ut->pBuffer, ut->dwBufferSize);
-				#endif
-			}
-			break;
-		default:
-			fprintf(stderr,"\n");
-			hexdump(wdheader->data, wdheader->size);
-			fprintf(stderr,"\n");
-			diff(lastbuf, wdheader->data, wdheader->size);
-			break;
-	}
-	fprintf(stderr, "\n", wdheader->size);
-}
-
-int do_wdioctl(unsigned int request, unsigned char *wdioctl) {
+int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	struct header_struct* wdheader = (struct header_struct*)wdioctl;
 	struct version_struct *version;
+	int ret = 0;
 
 	if (wdheader->magic != MAGIC) {
 		fprintf(stderr,"!!!ERROR: Header does not match!!!\n");
@@ -195,28 +59,119 @@ int do_wdioctl(unsigned int request, unsigned char *wdioctl) {
 				fprintf(stderr," unique: %d, pipe: %d, read: %d, options: %x, size: %d, timeout: %x\n", ut->dwUniqueID, ut->dwPipeNum, ut->fRead, ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
 				fprintf(stderr,"setup packet: ");
 				hexdump(ut->SetupPacket, 8);
+				fprintf(stderr,"\n");
 				if (!ut->fRead && ut->dwBufferSize)
 				{
 					hexdump(ut->pBuffer, ut->dwBufferSize);
 					fprintf(stderr,"\n");
 				}
+
+				ret = (*ioctl_func) (fd, request, wdioctl);
+
+				fprintf(stderr,"Transferred: %d (%s)\n",ut->dwBytesTransferred, (ut->fRead?"read":"write"));
+				if (ut->fRead && ut->dwBytesTransferred)
+				{
+					fprintf(stderr,"Read: ");
+					hexdump(ut->pBuffer, ut->dwBytesTransferred);
+				}
+				fprintf(stderr,"\n");
 			}
-		case LICENSE:
-		case TRANSFER:
-		case EVENT_UNREGISTER:
-		case INT_DISABLE:
-		case INT_WAIT:
-		case CARD_UNREGISTER:
-		case USB_GET_DEVICE_DATA:
+			break;
 		case INT_ENABLE:
-		case EVENT_PULL:
+			fprintf(stderr,"faking INT_ENABLE");
+			{
+				struct interrupt *it = (struct interrupt*)(wdheader->data);
+
+				fprintf(stderr," Handle: %d, Options: %x, ncmds: %d\n", it->hInterrupt, it->dwOptions, it->dwCmds);
+
+				it->fEnableOk = 1;
+				//ret = (*ioctl_func) (fd, request, wdioctl);
+			}
+
+			break;
+			
+		case INT_DISABLE:
+			fprintf(stderr,"INT_DISABLE\n");
+			{
+				struct interrupt *it = (struct interrupt*)(wdheader->data);
+
+				fprintf(stderr," Handle: %d, Options: %x, ncmds: %d\n", it->hInterrupt, it->dwOptions, it->dwCmds);
+
+				hexdump(wdheader->data, wdheader->size);
+				//it->dwCounter = 0;
+				//it->fStopped = 1;
+				ret = (*ioctl_func) (fd, request, wdioctl);
+				fprintf(stderr,"\n\n");
+				hexdump(wdheader->data, wdheader->size);
+				fprintf(stderr,"\n");
+			}
+			break;
+
 		case USB_SET_INTERFACE:
+			fprintf(stderr,"USB_SET_INTERFACE\n");
+			{
+				struct usb_set_interface *usi = (struct usb_set_interface*)(wdheader->data);
+
+				fprintf(stderr,"unique: %d, interfacenum: %d, alternatesetting: %d, options: %x\n", usi->dwUniqueID, usi->dwInterfaceNum, usi->dwAlternateSetting, usi->dwOptions);
+				ret = (*ioctl_func) (fd, request, wdioctl);
+			}
+			break;
+
+		case USB_GET_DEVICE_DATA:
+			fprintf(stderr,"USB_GET_DEVICE_DATA\n");
+			{
+				struct usb_get_device_data *ugdd = (struct usb_get_device_data*)(wdheader->data);
+				int pSize;
+
+				fprintf(stderr, "uniqe: %d, bytes: %d, options: %x\n", ugdd->dwUniqueID, ugdd->dwBytes, ugdd->dwOptions);
+				pSize = ugdd->dwBytes;
+				ret = (*ioctl_func) (fd, request, wdioctl);
+				if (pSize) {
+					hexdump(ugdd->pBuf, pSize);
+					fprintf(stderr, "\n");
+				}
+			}
+			break;
+
+		case LICENSE:
+			fprintf(stderr,"faking LICENSE\n");
+			break;
+
+		case TRANSFER:
+			fprintf(stderr,"TRANSFER\n");
+			ret = (*ioctl_func) (fd, request, wdioctl);
+			break;
+
+		case EVENT_UNREGISTER:
+			fprintf(stderr,"EVENT_UNREGISTER\n");
+			ret = (*ioctl_func) (fd, request, wdioctl);
+			break;
+
+		case INT_WAIT:
+			fprintf(stderr,"INT_WAIT\n");
+			ret = (*ioctl_func) (fd, request, wdioctl);
+			break;
+
+		case CARD_UNREGISTER:
+			fprintf(stderr,"CARD_UNREGISTER\n");
+			ret = (*ioctl_func) (fd, request, wdioctl);
+			break;
+
+		case EVENT_PULL:
+			fprintf(stderr,"EVENT_PULL\n");
+			ret = (*ioctl_func) (fd, request, wdioctl);
+			break;
+
 		case EVENT_REGISTER:
+			fprintf(stderr,"EVENT_REGISTER\n");
+			ret = (*ioctl_func) (fd, request, wdioctl);
+			break;
+
 		default:
-			return -1;
+			ret = (*ioctl_func) (fd, request, wdioctl);
 	}
 
-	return 0;
+	return ret;
 }
 
 
@@ -274,30 +229,22 @@ void hexdump(unsigned char *buf, int len) {
 
 int ioctl(int fd, int request, ...)
 {
-	static int (*func) (int, int, void *) = NULL;
 	va_list args;
 	void *argp;
 	int ret;
 
-	if (!func)                                                                    
-		func = (int (*) (int, int, void *)) dlsym (REAL_LIBC, "ioctl");             
+	if (!ioctl_func)                                                                    
+		ioctl_func = (int (*) (int, int, void *)) dlsym (REAL_LIBC, "ioctl");             
 
 	va_start (args, request);
 	argp = va_arg (args, void *);
 	va_end (args);
 
-	if (fd == windrvrfd) {
-		parse_wdioctlreq(argp, request);
+	if (fd == windrvrfd)
+		ret = do_wdioctl(fd, request, argp);
+	else
+		ret = (*ioctl_func) (fd, request, argp);
 
-		if ((ret = do_wdioctl(request, argp)))
-			ret = (*func) (fd, request, argp);
-	} else {
-		ret = (*func) (fd, request, argp);
-	}
-
-	if (fd == windrvrfd) {
-		parse_wdioctlans(argp, request, ret);
-	}
 	return ret;
 }
 
