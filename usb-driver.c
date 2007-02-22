@@ -19,12 +19,14 @@
 #include <sys/time.h>
 #include <stdio.h>
 #include <usb.h>
+#include <signal.h>
 #include "xilinx.h"
 
 static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = 0;
 static struct usb_bus *busses = NULL;
-static struct usb_device *usb_cable;
+static struct usb_device *usbdevice;
+static usb_dev_handle *usb_devhandle = NULL;
 static unsigned long card_type;
 
 #define NO_WINDRVR 1
@@ -62,23 +64,23 @@ int usb_deviceinfo(unsigned char *buf) {
 		struct usb_device_info *udi = (struct usb_device_info*)(buf+len);
 
 		udi->Descriptor.bLength = sizeof(WDU_DEVICE_DESCRIPTOR);
-		udi->Descriptor.bDescriptorType = usb_cable->descriptor.bDescriptorType;
-		udi->Descriptor.bcdUSB = usb_cable->descriptor.bcdUSB;
-		udi->Descriptor.bDeviceClass = usb_cable->descriptor.bDeviceClass;
-		udi->Descriptor.bDeviceSubClass = usb_cable->descriptor.bDeviceSubClass;
-		udi->Descriptor.bDeviceProtocol = usb_cable->descriptor.bDeviceProtocol;
-		udi->Descriptor.bMaxPacketSize0 = usb_cable->descriptor.bMaxPacketSize0;
-		udi->Descriptor.idVendor = usb_cable->descriptor.idVendor;
-		udi->Descriptor.idProduct = usb_cable->descriptor.idProduct;
-		udi->Descriptor.bcdDevice = usb_cable->descriptor.bcdDevice;
-		udi->Descriptor.iManufacturer = usb_cable->descriptor.iManufacturer;
-		udi->Descriptor.iProduct = usb_cable->descriptor.iProduct;
-		udi->Descriptor.iSerialNumber = usb_cable->descriptor.iSerialNumber;
-		udi->Descriptor.bNumConfigurations = usb_cable->descriptor.bNumConfigurations;
+		udi->Descriptor.bDescriptorType = usbdevice->descriptor.bDescriptorType;
+		udi->Descriptor.bcdUSB = usbdevice->descriptor.bcdUSB;
+		udi->Descriptor.bDeviceClass = usbdevice->descriptor.bDeviceClass;
+		udi->Descriptor.bDeviceSubClass = usbdevice->descriptor.bDeviceSubClass;
+		udi->Descriptor.bDeviceProtocol = usbdevice->descriptor.bDeviceProtocol;
+		udi->Descriptor.bMaxPacketSize0 = usbdevice->descriptor.bMaxPacketSize0;
+		udi->Descriptor.idVendor = usbdevice->descriptor.idVendor;
+		udi->Descriptor.idProduct = usbdevice->descriptor.idProduct;
+		udi->Descriptor.bcdDevice = usbdevice->descriptor.bcdDevice;
+		udi->Descriptor.iManufacturer = usbdevice->descriptor.iManufacturer;
+		udi->Descriptor.iProduct = usbdevice->descriptor.iProduct;
+		udi->Descriptor.iSerialNumber = usbdevice->descriptor.iSerialNumber;
+		udi->Descriptor.bNumConfigurations = usbdevice->descriptor.bNumConfigurations;
 
 		/* TODO: Fix Pipe0! */
 		udi->Pipe0.dwNumber = 0x00;
-		udi->Pipe0.dwMaximumPacketSize = usb_cable->descriptor.bMaxPacketSize0;
+		udi->Pipe0.dwMaximumPacketSize = usbdevice->descriptor.bMaxPacketSize0;
 		udi->Pipe0.type = 0;
 		udi->Pipe0.direction = 3;
 		udi->Pipe0.dwInterval = 0;
@@ -90,9 +92,9 @@ int usb_deviceinfo(unsigned char *buf) {
 
 	len = sizeof(struct usb_device_info);
 
-	for (i=0; i<usb_cable->descriptor.bNumConfigurations; i++)
+	for (i=0; i<usbdevice->descriptor.bNumConfigurations; i++)
 	{
-		struct usb_config_descriptor *conf_desc = &usb_cable->config[i];
+		struct usb_config_descriptor *conf_desc = &usbdevice->config[i];
 		WDU_INTERFACE **pInterfaces;
 		WDU_ALTERNATE_SETTING **pAlternateSettings[conf_desc->bNumInterfaces];
 		WDU_ALTERNATE_SETTING **pActiveAltSetting[conf_desc->bNumInterfaces];
@@ -126,7 +128,7 @@ int usb_deviceinfo(unsigned char *buf) {
 				pActiveInterface[j] = iface;
 
 				pAlternateSettings[j] = &(iface->pAlternateSettings);
-				iface->dwNumAltSettings = usb_cable->config[i].interface[j].num_altsetting;
+				iface->dwNumAltSettings = usbdevice->config[i].interface[j].num_altsetting;
 				pActiveAltSetting[j] = &(iface->pActiveAltSetting);
 
 				len += sizeof(WDU_INTERFACE);
@@ -137,7 +139,7 @@ int usb_deviceinfo(unsigned char *buf) {
 
 		for (j=0; j<conf_desc->bNumInterfaces; j++)
 		{
-			struct usb_interface *interface = &usb_cable->config[i].interface[j];
+			struct usb_interface *interface = &usbdevice->config[i].interface[j];
 
 			if (buf) {
 				*pAlternateSettings[j] = (WDU_ALTERNATE_SETTING*)(buf+len);
@@ -308,7 +310,17 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				fprintf(stderr,"unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n", usi->dwUniqueID, usi->dwInterfaceNum, usi->dwAlternateSetting, usi->dwOptions);
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+				if (usbdevice) {
+					int iface;
+
+					if (!usb_devhandle)
+						usb_devhandle = usb_open(usbdevice);
+//MGMG
+					ret = usb_claim_interface(usb_devhandle, iface);
+				}
 #endif
+				fprintf(stderr,"unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n", usi->dwUniqueID, usi->dwInterfaceNum, usi->dwAlternateSetting, usi->dwOptions);
 			}
 			break;
 
@@ -324,7 +336,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
 				if (!ugdd->dwBytes) {
-					if (usb_cable) {
+					if (usbdevice) {
 						ugdd->dwBytes = usb_deviceinfo(NULL);
 					}
 				} else {
@@ -363,19 +375,22 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 							   (desc->idProduct == e->matchTables[i].ProductId) &&
 							   (desc->bDeviceClass == e->matchTables[i].bDeviceClass) &&
 							   (desc->bDeviceSubClass == e->matchTables[i].bDeviceSubClass)) {
-							   	struct usb_interface *interface = dev->config->interface;
-								int ai;
-								
-								for (ai = 0; ai < interface->num_altsetting; ai++) {
-									fprintf(stderr, "intclass: %x, intsubclass: %x, intproto: %x\n", interface->altsetting[i].bInterfaceClass, interface->altsetting[i].bInterfaceSubClass, interface->altsetting[i].bInterfaceProtocol);
-									if ((interface->altsetting[i].bInterfaceSubClass == e->matchTables[i].bInterfaceSubClass) &&
-									    (interface->altsetting[i].bInterfaceProtocol == e->matchTables[i].bInterfaceProtocol)){
-										/* TODO: check interfaceClass! */
-										fprintf(stderr,"!!!FOUND DEVICE WITH LIBUSB!!!\n");
-										usb_cable = dev;
-										card_type = e->dwCardType;
-									}
-								}
+								   int ac;
+								   for (ac = 0; ac < desc->bNumConfigurations; ac++) {
+									   struct usb_interface *interface = dev->config[ac].interface;
+									   int ai;
+
+									   for (ai = 0; ai < interface->num_altsetting; ai++) {
+										   fprintf(stderr, "intclass: %x, intsubclass: %x, intproto: %x\n", interface->altsetting[i].bInterfaceClass, interface->altsetting[i].bInterfaceSubClass, interface->altsetting[i].bInterfaceProtocol);
+										   if ((interface->altsetting[ai].bInterfaceSubClass == e->matchTables[i].bInterfaceSubClass) &&
+												   (interface->altsetting[ai].bInterfaceProtocol == e->matchTables[i].bInterfaceProtocol)){
+											   /* TODO: check interfaceClass! */
+											   fprintf(stderr,"!!!FOUND DEVICE WITH LIBUSB!!!\n");
+											   usbdevice = dev;
+											   card_type = e->dwCardType;
+										   }
+									   }
+								   }
 							}
 						}
 					}
@@ -383,6 +398,10 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+//handle: 0, action: 16371, status: 0, eventid: 0, cardtype: 4294967294, kplug: 0, options: 0, dev: 0:0, unique: 0, ver: 1, nummatch: 2
+//handle: 1, action: 16371, status: 0, eventid: 0, cardtype: 4294967294, kplug: 0, options: 0, dev: 0:0, unique: 0, ver: 1, nummatch: 2
+				e->handle++;
 #endif
 
 				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
@@ -415,8 +434,14 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				if (usb_cable)
-					it->dwCounter++;
+				if (usbdevice) {
+					if (it->dwCounter == 0) {
+						it->dwCounter = 1;
+					} else {
+						//FIXME: signal 
+						kill(getpid(), SIGHUP);
+					}
+				}
 #endif
 
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
@@ -436,7 +461,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				struct event *e = (struct event*)(wdheader->data);
 				int i;
 
-				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
+				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lx, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
 				for (i = 0; i < e->dwNumMatchTables; i++)
 					fprintf(stderr,"match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
 
@@ -448,24 +473,24 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 //match: dev: 0:0, class: 0, subclass: 0, intclass: 0, intsubclass: 0, intproto: 0
 //handle: 1, action: 1, status: 0, eventid: 109, cardtype: 4294967294, kplug: 0, options: 0, dev: 0:0, unique: 90, ver: 1, nummatch: 1
 //match: dev: 3fd:8, class: 0, subclass: 0, intclass: ff, intsubclass: 0, intproto: 0
-				if (usb_cable) {
-					struct usb_interface *interface = usb_cable->config->interface;
+				if (usbdevice) {
+					struct usb_interface *interface = usbdevice->config->interface;
 
 					e->dwCardType = card_type;
 					e->dwAction = 1;
 					e->dwEventId = 109;
 					e->u.Usb.dwUniqueID = 4711;
-					e->matchTables[0].VendorId = usb_cable->descriptor.idVendor;
-					e->matchTables[0].ProductId = usb_cable->descriptor.idProduct;
-					e->matchTables[0].bDeviceClass = usb_cable->descriptor.bDeviceClass;
-					e->matchTables[0].bDeviceSubClass = usb_cable->descriptor.bDeviceSubClass;
+					e->matchTables[0].VendorId = usbdevice->descriptor.idVendor;
+					e->matchTables[0].ProductId = usbdevice->descriptor.idProduct;
+					e->matchTables[0].bDeviceClass = usbdevice->descriptor.bDeviceClass;
+					e->matchTables[0].bDeviceSubClass = usbdevice->descriptor.bDeviceSubClass;
 					e->matchTables[0].bInterfaceClass = interface->altsetting[0].bInterfaceClass;
 					e->matchTables[0].bInterfaceSubClass = interface->altsetting[0].bInterfaceSubClass;
 					e->matchTables[0].bInterfaceProtocol = interface->altsetting[0].bInterfaceProtocol;
 				}
 #endif
 
-				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
+				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lx, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
 				for (i = 0; i < e->dwNumMatchTables; i++)
 					fprintf(stderr,"match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
 			}
