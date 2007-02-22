@@ -182,7 +182,20 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 		case EVENT_PULL:
 			fprintf(stderr,"EVENT_PULL\n");
-			ret = (*ioctl_func) (fd, request, wdioctl);
+			{
+				struct event *e = (struct event*)(wdheader->data);
+				int i;
+
+				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
+				for (i = 0; i < e->dwNumMatchTables; i++)
+					fprintf(stderr,"match: dev: %x:%x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
+
+				ret = (*ioctl_func) (fd, request, wdioctl);
+
+				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
+				for (i = 0; i < e->dwNumMatchTables; i++)
+					fprintf(stderr,"match: dev: %x:%x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
+			}
 			break;
 
 		default:
