@@ -36,8 +36,8 @@ void diff(unsigned char *buf1, unsigned char *buf2, int len);
 //Vendor: 3fd
 //12 01 00 02 00 00 00 40 fd 03 08 00 00 00 01 02                              12 01 00 02 00 00 00 40 fd 03 08 00 00 00 01 02
 //00 01 00 00 00 00 00 00 40 00 00 00 00 00 00 00                              00 01 00 00 00 00 00 00 40 00 00 00 00 00 00 00
-//03 00 00 00 00 00 00 00 38 45 21 08 38 45 21 08                              03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-//4c 45 21 08 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//03 00 00 00 00 00 00 00 38 45 21 08 38 45 21 08                              03 00 00 00 00 00 00 00 38 45 21 08 38 45 21 08
+//4c 45 21 08 00 00 00 00 00 00 00 00 00 00 00 00                              4c 45 21 08 00 00 00 00 00 00 00 00 00 00 00 00
 //00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 //00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 //00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
@@ -45,9 +45,9 @@ void diff(unsigned char *buf1, unsigned char *buf2, int len);
 //00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 //00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 //00 00 00 00 00 00 00 00 09 02 20 00 01 02 00 80                              00 00 00 00 00 00 00 00 09 02 20 00 01 02 00 80
-//8c 00 00 00 01 00 00 00 4c 45 21 08 58 45 21 08                              8c 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00
-//01 00 00 00 58 45 21 08 09 04 00 00 02 ff 00 00                              01 00 00 00 00 00 00 00 09 04 00 00 02 ff 00 00
-//00 00 00 00 6c 45 21 08 7c 45 21 08 07 05 02 02                              00 00 00 00 00 00 00 00 00 00 00 00 07 05 02 02
+//8c 00 00 00 01 00 00 00 4c 45 21 08 58 45 21 08                              8c 00 00 00 01 00 00 00 4c 45 21 08 58 45 21 08
+//01 00 00 00 58 45 21 08 09 04 00 00 02 ff 00 00                              01 00 00 00 58 45 21 08 09 04 00 00 02 ff 00 00
+//00 00 00 00 6c 45 21 08 7c 45 21 08 07 05 02 02                              00 00 00 00 6c 45 21 08 7c 45 21 08 07 05 02 02
 //00 02 00 00 07 05 86 02 00 02 00 00 02 00 00 00                              00 02 00 00 07 05 86 02 00 02 00 00 02 00 00 00
 //00 02 00 00 02 00 00 00 02 00 00 00 00 00 00 00                              00 02 00 00 02 00 00 00 02 00 00 00 00 00 00 00
 //86 00 00 00 00 02 00 00 02 00 00 00 01 00 00 00                              86 00 00 00 00 02 00 00 02 00 00 00 01 00 00 00
@@ -55,6 +55,8 @@ void diff(unsigned char *buf1, unsigned char *buf2, int len);
 int usb_deviceinfo(unsigned char *buf) {
 	int i,j,k,l;
 	int len = 0;
+	WDU_CONFIGURATION **pConfigs, **pActiveConfig;
+	WDU_INTERFACE **pActiveInterface;
 
 	if (buf) {
 		struct usb_device_info *udi = (struct usb_device_info*)(buf+len);
@@ -80,6 +82,10 @@ int usb_deviceinfo(unsigned char *buf) {
 		udi->Pipe0.type = 0;
 		udi->Pipe0.direction = 3;
 		udi->Pipe0.dwInterval = 0;
+
+		pConfigs = &(udi->pConfigs);
+		pActiveConfig = &(udi->pActiveConfig);
+		pActiveInterface = &(udi->pActiveInterface[0]);
 	}
 
 	len = sizeof(struct usb_device_info);
@@ -87,8 +93,15 @@ int usb_deviceinfo(unsigned char *buf) {
 	for (i=0; i<usb_cable->descriptor.bNumConfigurations; i++)
 	{
 		struct usb_config_descriptor *conf_desc = &usb_cable->config[i];
+		WDU_INTERFACE **pInterfaces;
+		WDU_ALTERNATE_SETTING **pAlternateSettings[conf_desc->bNumInterfaces];
+		WDU_ALTERNATE_SETTING **pActiveAltSetting[conf_desc->bNumInterfaces];
+
 		if (buf) {
 			WDU_CONFIGURATION *cfg = (WDU_CONFIGURATION*)(buf+len);
+
+			*pConfigs = cfg;
+			*pActiveConfig = cfg;
 
 			cfg->Descriptor.bLength = conf_desc->bLength;
 			cfg->Descriptor.bDescriptorType = conf_desc->bDescriptorType;
@@ -100,12 +113,21 @@ int usb_deviceinfo(unsigned char *buf) {
 			cfg->Descriptor.MaxPower = conf_desc->MaxPower;
 
 			cfg->dwNumInterfaces = conf_desc->bNumInterfaces;
+
+			pInterfaces = &(cfg->pInterfaces);
 		}
 		len += sizeof(WDU_CONFIGURATION);
+
 		if (buf) {
+			*pInterfaces = (WDU_INTERFACE*)(buf+len);
 			for (j=0; j<conf_desc->bNumInterfaces; j++) {
 				WDU_INTERFACE *iface = (WDU_INTERFACE*)(buf+len);
+
+				pActiveInterface[j] = iface;
+
+				pAlternateSettings[j] = &(iface->pAlternateSettings);
 				iface->dwNumAltSettings = usb_cable->config[i].interface[j].num_altsetting;
+				pActiveAltSetting[j] = &(iface->pActiveAltSetting);
 
 				len += sizeof(WDU_INTERFACE);
 			}
@@ -116,10 +138,19 @@ int usb_deviceinfo(unsigned char *buf) {
 		for (j=0; j<conf_desc->bNumInterfaces; j++)
 		{
 			struct usb_interface *interface = &usb_cable->config[i].interface[j];
+
+			if (buf) {
+				*pAlternateSettings[j] = (WDU_ALTERNATE_SETTING*)(buf+len);
+				/* FIXME: */
+				*pActiveAltSetting[j] = (WDU_ALTERNATE_SETTING*)(buf+len);
+			}
+
 			for(k=0; k<interface->num_altsetting; k++)
 			{
-				unsigned char bNumEndpoints;
-				bNumEndpoints = interface->altsetting[k].bNumEndpoints;
+				unsigned char bNumEndpoints = interface->altsetting[k].bNumEndpoints;
+				WDU_ENDPOINT_DESCRIPTOR **pEndpointDescriptors;
+				WDU_PIPE_INFO **pPipes;
+
 				if (buf) {
 					WDU_ALTERNATE_SETTING *altset = (WDU_ALTERNATE_SETTING*)(buf+len);
 
@@ -132,11 +163,14 @@ int usb_deviceinfo(unsigned char *buf) {
 					altset->Descriptor.bInterfaceSubClass = interface->altsetting[k].bInterfaceSubClass;
 					altset->Descriptor.bInterfaceProtocol = interface->altsetting[k].bInterfaceProtocol;
 					altset->Descriptor.iInterface = interface->altsetting[k].iInterface;
+					pEndpointDescriptors = &(altset->pEndpointDescriptors);
+					pPipes = &(altset->pPipes);
 
 				}
 				len +=sizeof(WDU_ALTERNATE_SETTING);
 
 				if (buf) {
+					*pEndpointDescriptors = (WDU_ENDPOINT_DESCRIPTOR*)(buf+len);
 					for (l = 0; l < bNumEndpoints; l++) {
 						WDU_ENDPOINT_DESCRIPTOR *ed = (WDU_ENDPOINT_DESCRIPTOR*)(buf+len);
 
@@ -150,6 +184,7 @@ int usb_deviceinfo(unsigned char *buf) {
 						len += sizeof(WDU_ENDPOINT_DESCRIPTOR);
 					}
 						
+					*pPipes = (WDU_PIPE_INFO*)(buf+len);
 					for (l = 0; l < bNumEndpoints; l++) {
 						WDU_PIPE_INFO *pi = (WDU_PIPE_INFO*)(buf+len);
 
