@@ -20,9 +20,8 @@
 #include <stdio.h>
 #include "xilinx.h"
 
-#define SNIFFLEN 4096
-static unsigned char lastbuf[4096];
 static int (*ioctl_func) (int, int, void *) = NULL;
+static int windrvrfd = 0;
 
 void hexdump(unsigned char *buf, int len);
 void diff(unsigned char *buf1, unsigned char *buf2, int len);
@@ -33,8 +32,8 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	int ret = 0;
 
 	if (wdheader->magic != MAGIC) {
-		fprintf(stderr,"!!!ERROR: Header does not match!!!\n");
-		return;
+		fprintf(stderr,"!!!ERROR: magic header does not match!!!\n");
+		return (*ioctl_func) (fd, request, wdioctl);
 	}
 
 	switch(request) {
@@ -44,19 +43,25 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			version->versionul = 999;
 			fprintf(stderr,"faking VERSION\n");
 			break;
+
+		case LICENSE:
+			fprintf(stderr,"faking LICENSE\n");
+			break;
+
 		case CARD_REGISTER:
 			{
-				struct card_register* cr = (struct card_register*)(wdheader->data);
+				//struct card_register* cr = (struct card_register*)(wdheader->data);
 				/* Todo: LPT-Port already in use */
 			}
 			fprintf(stderr,"faking CARD_REGISTER\n");
 			break;
+
 		case USB_TRANSFER:
 			fprintf(stderr,"in USB_TRANSFER");
 			{
 				struct usb_transfer *ut = (struct usb_transfer*)(wdheader->data);
 
-				fprintf(stderr," unique: %d, pipe: %d, read: %d, options: %x, size: %d, timeout: %x\n", ut->dwUniqueID, ut->dwPipeNum, ut->fRead, ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
+				fprintf(stderr," unique: %lu, pipe: %lu, read: %lu, options: %lx, size: %lu, timeout: %lx\n", ut->dwUniqueID, ut->dwPipeNum, ut->fRead, ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
 				fprintf(stderr,"setup packet: ");
 				hexdump(ut->SetupPacket, 8);
 				fprintf(stderr,"\n");
@@ -68,7 +73,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 				ret = (*ioctl_func) (fd, request, wdioctl);
 
-				fprintf(stderr,"Transferred: %d (%s)\n",ut->dwBytesTransferred, (ut->fRead?"read":"write"));
+				fprintf(stderr,"Transferred: %lu (%s)\n",ut->dwBytesTransferred, (ut->fRead?"read":"write"));
 				if (ut->fRead && ut->dwBytesTransferred)
 				{
 					fprintf(stderr,"Read: ");
@@ -77,12 +82,13 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				fprintf(stderr,"\n");
 			}
 			break;
+
 		case INT_ENABLE:
 			fprintf(stderr,"faking INT_ENABLE");
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-				fprintf(stderr," Handle: %d, Options: %x, ncmds: %d\n", it->hInterrupt, it->dwOptions, it->dwCmds);
+				fprintf(stderr," Handle: %lu, Options: %lx, ncmds: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds);
 
 				it->fEnableOk = 1;
 				//ret = (*ioctl_func) (fd, request, wdioctl);
@@ -95,7 +101,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-				fprintf(stderr," Handle: %d, Options: %x, ncmds: %d\n", it->hInterrupt, it->dwOptions, it->dwCmds);
+				fprintf(stderr," Handle: %lu, Options: %lx, ncmds: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds);
 
 				hexdump(wdheader->data, wdheader->size);
 				//it->dwCounter = 0;
@@ -112,7 +118,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct usb_set_interface *usi = (struct usb_set_interface*)(wdheader->data);
 
-				fprintf(stderr,"unique: %d, interfacenum: %d, alternatesetting: %d, options: %x\n", usi->dwUniqueID, usi->dwInterfaceNum, usi->dwAlternateSetting, usi->dwOptions);
+				fprintf(stderr,"unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n", usi->dwUniqueID, usi->dwInterfaceNum, usi->dwAlternateSetting, usi->dwOptions);
 				ret = (*ioctl_func) (fd, request, wdioctl);
 			}
 			break;
@@ -123,7 +129,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				struct usb_get_device_data *ugdd = (struct usb_get_device_data*)(wdheader->data);
 				int pSize;
 
-				fprintf(stderr, "uniqe: %d, bytes: %d, options: %x\n", ugdd->dwUniqueID, ugdd->dwBytes, ugdd->dwOptions);
+				fprintf(stderr, "uniqe: %lu, bytes: %lu, options: %lx\n", ugdd->dwUniqueID, ugdd->dwBytes, ugdd->dwOptions);
 				pSize = ugdd->dwBytes;
 				ret = (*ioctl_func) (fd, request, wdioctl);
 				if (pSize) {
@@ -131,10 +137,6 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					fprintf(stderr, "\n");
 				}
 			}
-			break;
-
-		case LICENSE:
-			fprintf(stderr,"faking LICENSE\n");
 			break;
 
 		case TRANSFER:
@@ -176,10 +178,6 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 
 typedef int (*open_funcptr_t) (const char *, int, mode_t);
-
-static windrvrfd = 0;
-static void* mmapped = NULL;
-static size_t mmapplen = 0;
 
 int open (const char *pathname, int flags, ...)
 {
