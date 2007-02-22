@@ -18,10 +18,12 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <stdio.h>
+#include <usb.h>
 #include "xilinx.h"
 
 static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = 0;
+static struct usb_bus *busses = NULL;
 
 void hexdump(unsigned char *buf, int len);
 void diff(unsigned char *buf1, unsigned char *buf2, int len);
@@ -229,6 +231,13 @@ int open (const char *pathname, int flags, ...)
 	if (!strcmp (pathname, "/dev/windrvr6")) {
 		fprintf(stderr,"opening windrvr6\n");
 		windrvrfd = fd;
+		if (!busses) {
+			usb_init();
+			usb_find_busses();
+			usb_find_devices();
+
+			busses = usb_get_busses();
+		}
 	}
 
 	return fd;
