@@ -441,6 +441,8 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 						//FIXME: signal 
 						kill(getpid(), SIGHUP);
 					}
+				} else {
+					kill(getpid(), SIGHUP);
 				}
 #endif
 
