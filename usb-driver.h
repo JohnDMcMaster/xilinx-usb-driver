@@ -343,11 +343,10 @@ typedef struct
 	WDU_INTERFACE *pInterfaces;
 } WDU_CONFIGURATION;
 
-struct wdu_device_info {
+struct usb_device_info {
 	WDU_DEVICE_DESCRIPTOR Descriptor;
 	WDU_PIPE_INFO Pipe0;
 	WDU_CONFIGURATION *pConfigs;
 	WDU_CONFIGURATION *pActiveConfig;
 	WDU_INTERFACE *pActiveInterface[WD_USB_MAX_INTERFACES];
 };
-

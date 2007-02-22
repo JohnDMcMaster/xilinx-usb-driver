@@ -27,7 +27,7 @@ static struct usb_bus *busses = NULL;
 static struct usb_device *usb_cable;
 static unsigned long card_type;
 
-#define USE_LIBUSB 1
+//#define USE_LIBUSB 1
 
 void hexdump(unsigned char *buf, int len);
 void diff(unsigned char *buf1, unsigned char *buf2, int len);
@@ -110,10 +110,11 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
-				//it->dwCounter = 0;
-				//it->fStopped = 1;
 #ifndef USE_LIBUSB
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+				it->dwCounter = 0;
+				it->fStopped = 1;
 #endif
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 			}
@@ -137,12 +138,85 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				struct usb_get_device_data *ugdd = (struct usb_get_device_data*)(wdheader->data);
 				int pSize;
 
-				fprintf(stderr, "uniqe: %lu, bytes: %lu, options: %lx\n", ugdd->dwUniqueID, ugdd->dwBytes, ugdd->dwOptions);
+				fprintf(stderr, "unique: %lu, bytes: %lu, options: %lx\n", ugdd->dwUniqueID, ugdd->dwBytes, ugdd->dwOptions);
 				pSize = ugdd->dwBytes;
+				if (pSize) {
+					hexdump(ugdd->pBuf, pSize);
+				}
 #ifndef USE_LIBUSB
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+				if (!ugdd->dwBytes) {
+					if (usb_cable) {
+						ugdd->dwBytes = sizeof(struct usb_device_info) - 8 + (sizeof(WDU_CONFIGURATION)*2) + sizeof(WDU_INTERFACE) * 6;
+						/* TODO: Fixme */
+						ugdd->dwBytes = 276;
+					}
+				} else {
+					struct usb_device_info *udi = (struct usb_device_info*)ugdd->pBuf;
+unsigned char dings[] = {0x12, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x40, 0xfd, 0x03, 0x08, 0x00, 0x00, 0x00, 0x01, 0x02,
+0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x38, 0x45, 0x21, 0x08, 0x38, 0x45, 0x21, 0x08,
+0x4c, 0x45, 0x21, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x02, 0x20, 0x00, 0x01, 0x02, 0x00, 0x80,
+0x8c, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x4c, 0x45, 0x21, 0x08, 0x58, 0x45, 0x21, 0x08,
+0x01, 0x00, 0x00, 0x00, 0x58, 0x45, 0x21, 0x08, 0x09, 0x04, 0x00, 0x00, 0x02, 0xff, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x6c, 0x45, 0x21, 0x08, 0x7c, 0x45, 0x21, 0x08, 0x07, 0x05, 0x02, 0x02,
+0x00, 0x02, 0x00, 0x00, 0x07, 0x05, 0x86, 0x02, 0x00, 0x02, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+0x00, 0x02, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x86, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00};
+
+//unique: 94, bytes: 276, options: 0
+//Vendor: 3fd
+//12 01 00 02 00 00 00 40 fd 03 08 00 00 00 01 02                              12 01 00 02 00 00 00 40 fd 03 08 00 00 00 01 02
+//00 01 00 00 00 00 00 00 40 00 00 00 00 00 00 00                              00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//03 00 00 00 00 00 00 00 38 45 21 08 38 45 21 08                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//4c 45 21 08 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//00 00 00 00 00 00 00 00 09 02 20 00 01 02 00 80                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//8c 00 00 00 01 00 00 00 4c 45 21 08 58 45 21 08                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//01 00 00 00 58 45 21 08 09 04 00 00 02 ff 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//00 00 00 00 6c 45 21 08 7c 45 21 08 07 05 02 02                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//00 02 00 00 07 05 86 02 00 02 00 00 02 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//00 02 00 00 02 00 00 00 02 00 00 00 00 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//86 00 00 00 00 02 00 00 02 00 00 00 01 00 00 00                              00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+//00 00 00 00                                                                  00 00 00 00
+
+					bzero(udi, ugdd->dwBytes);
+					//memcpy(udi, dings, 276);
+					udi->Descriptor.bLength = sizeof(WDU_DEVICE_DESCRIPTOR);
+					udi->Descriptor.bDescriptorType = usb_cable->descriptor.bDescriptorType;
+					udi->Descriptor.bcdUSB = usb_cable->descriptor.bcdUSB;
+					udi->Descriptor.bDeviceClass = usb_cable->descriptor.bDeviceClass;
+					udi->Descriptor.bDeviceSubClass = usb_cable->descriptor.bDeviceSubClass;
+					udi->Descriptor.bDeviceProtocol = usb_cable->descriptor.bDeviceProtocol;
+					udi->Descriptor.bMaxPacketSize0 = usb_cable->descriptor.bMaxPacketSize0;
+					udi->Descriptor.idVendor = usb_cable->descriptor.idVendor;
+					udi->Descriptor.idProduct = usb_cable->descriptor.idProduct;
+					udi->Descriptor.bcdDevice = usb_cable->descriptor.bcdDevice;
+					udi->Descriptor.iManufacturer = usb_cable->descriptor.iManufacturer;
+					udi->Descriptor.iProduct = usb_cable->descriptor.iProduct;
+					udi->Descriptor.iSerialNumber = usb_cable->descriptor.iSerialNumber;
+					udi->Descriptor.bNumConfigurations = usb_cable->descriptor.bNumConfigurations;
+				}
 #endif
 				if (pSize) {
+					struct usb_device_info *udi = (struct usb_device_info*)ugdd->pBuf;
+
+					fprintf(stderr, "Vendor: %x\n", udi->Descriptor.idVendor);
+
 					hexdump(ugdd->pBuf, pSize);
 					fprintf(stderr, "\n");
 				}
@@ -158,7 +232,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
 				for (i = 0; i < e->dwNumMatchTables; i++) {
-					fprintf(stderr,"match: dev: %x:%x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
+					fprintf(stderr,"match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
 
 					for (bus = busses; bus; bus = bus->next) {
 						struct usb_device *dev;
@@ -194,7 +268,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
 				for (i = 0; i < e->dwNumMatchTables; i++)
-					fprintf(stderr,"match: dev: %x:%x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
+					fprintf(stderr,"match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
 			}
 			break;
 
@@ -245,7 +319,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
 				for (i = 0; i < e->dwNumMatchTables; i++)
-					fprintf(stderr,"match: dev: %x:%x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
+					fprintf(stderr,"match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
 
 #ifndef USE_LIBUSB
 				ret = (*ioctl_func) (fd, request, wdioctl);
@@ -274,7 +348,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
 				for (i = 0; i < e->dwNumMatchTables; i++)
-					fprintf(stderr,"match: dev: %x:%x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
+					fprintf(stderr,"match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
 			}
 			break;
 
