@@ -28,6 +28,7 @@ static struct usb_bus *busses = NULL;
 static struct usb_device *usbdevice;
 static usb_dev_handle *usb_devhandle = NULL;
 static unsigned long card_type;
+static int ints_enabled = 0;
 
 #define NO_WINDRVR 1
 
@@ -224,6 +225,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 		return (*ioctl_func) (fd, request, wdioctl);
 	}
 
+	fprintf(stderr,"PID %d: ",getpid());
 	switch(request) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
@@ -268,19 +270,21 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				{
 					fprintf(stderr,"Read: ");
 					hexdump(ut->pBuffer, ut->dwBytesTransferred);
+					fprintf(stderr,"\n");
 				}
-				fprintf(stderr,"\n");
 			}
 			break;
 
 		case INT_ENABLE:
-			fprintf(stderr,"faking INT_ENABLE");
+			fprintf(stderr,"INT_ENABLE\n");
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
+				hexdump(wdheader->data, wdheader->size);
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 
 				it->fEnableOk = 1;
+				ints_enabled = 1;
 				//ret = (*ioctl_func) (fd, request, wdioctl);
 			}
 
@@ -297,6 +301,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #else
 				it->dwCounter = 0;
 				it->fStopped = 1;
+				ints_enabled = 0;
 #endif
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 			}
@@ -325,16 +330,14 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			break;
 
 		case USB_GET_DEVICE_DATA:
-			fprintf(stderr,"USB_GET_DEVICE_DATA\n");
+			fprintf(stderr,"faking USB_GET_DEVICE_DATA\n");
 			{
 				struct usb_get_device_data *ugdd = (struct usb_get_device_data*)(wdheader->data);
 				int pSize;
 
 				fprintf(stderr, "unique: %lu, bytes: %lu, options: %lx\n", ugdd->dwUniqueID, ugdd->dwBytes, ugdd->dwOptions);
 				pSize = ugdd->dwBytes;
-#ifndef NO_WINDRVR
-				ret = (*ioctl_func) (fd, request, wdioctl);
-#else
+				//ret = (*ioctl_func) (fd, request, wdioctl);
 				if (!ugdd->dwBytes) {
 					if (usbdevice) {
 						ugdd->dwBytes = usb_deviceinfo(NULL);
@@ -342,14 +345,11 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				} else {
 					usb_deviceinfo((unsigned char*)ugdd->pBuf);
 				}
-#endif
+
 				if (pSize) {
 					struct usb_device_info *udi = (struct usb_device_info*)ugdd->pBuf;
 
 					fprintf(stderr, "Vendor: %x\n", udi->Descriptor.idVendor);
-
-					hexdump(ugdd->pBuf, pSize);
-					fprintf(stderr, "\n");
 				}
 			}
 			break;
@@ -429,6 +429,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
+				hexdump(wdheader->data, wdheader->size);
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 
 #ifndef NO_WINDRVR
@@ -439,14 +440,14 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 						it->dwCounter = 1;
 					} else {
 						//FIXME: signal durch FUTEX, overload futex!
-						kill(getpid(), SIGHUP);
+						while(ints_enabled) {sleep(1);}
 					}
 				} else {
-					kill(getpid(), SIGHUP);
+					while(ints_enabled) {sleep(1);}
 				}
 #endif
 
-				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
+				fprintf(stderr,"INT_WAIT_RETURN: Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 			}
 			break;
 
@@ -481,7 +482,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					e->dwCardType = card_type;
 					e->dwAction = 1;
 					e->dwEventId = 109;
-					e->u.Usb.dwUniqueID = 4711;
+					e->u.Usb.dwUniqueID = 110;
 					e->matchTables[0].VendorId = usbdevice->descriptor.idVendor;
 					e->matchTables[0].ProductId = usbdevice->descriptor.idProduct;
 					e->matchTables[0].bDeviceClass = usbdevice->descriptor.bDeviceClass;
@@ -495,6 +496,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lx, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
 				for (i = 0; i < e->dwNumMatchTables; i++)
 					fprintf(stderr,"match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
+
 			}
 			break;
 
@@ -589,6 +591,20 @@ int ioctl(int fd, int request, ...)
 
 	return ret;
 }
+
+int futex(int *uaddr, int op, int val, const struct timespec *timeout, int *uaddr2, int val3) {
+	static int (*func) (int*, int, int, const struct timespec*, int*, int) = NULL;
+	int ret;
+
+	if (!func)
+		func = (int (*) (int*, int, int, const struct timespec*, int*, int)) dlsym(REAL_LIBC, "futex");
+
+	fprintf(stderr,"FUTEX: %x\n", (unsigned int)uaddr);
+	ret = (*func) (uaddr, op, val, timeout, uaddr2, val3);
+
+	return ret;
+}
+
 
 #if 0
 void *mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset)
