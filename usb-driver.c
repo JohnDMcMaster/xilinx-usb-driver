@@ -249,6 +249,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			fprintf(stderr,"in USB_TRANSFER");
 			{
 				struct usb_transfer *ut = (struct usb_transfer*)(wdheader->data);
+				int requesttype, request, value, index, size;
 
 				fprintf(stderr," unique: %lu, pipe: %lu, read: %lu, options: %lx, size: %lu, timeout: %lx\n", ut->dwUniqueID, ut->dwPipeNum, ut->fRead, ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
 				fprintf(stderr,"setup packet: ");
@@ -262,6 +263,22 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+				/* http://www.jungo.com/support/documentation/windriver/802/wdusb_man_mhtml/node55.html#SECTION001213000000000000000 */
+				requesttype = ut->SetupPacket[0];
+				request = ut->SetupPacket[1];
+				value = ut->SetupPacket[2] | (ut->SetupPacket[3] << 8);
+				index = ut->SetupPacket[4] | (ut->SetupPacket[5] << 8);
+				size = ut->SetupPacket[6] | (ut->SetupPacket[7] << 8);
+				fprintf(stderr, "requesttype: %x, request: %x, value: %u, index: %u, size: %u\n", requesttype, request, value, index, size);
+				ret = usb_control_msg(usb_devhandle, requesttype, request, value, index, ut->pBuffer, size, ut->dwTimeout);
+				if (ret < 0) {
+					fprintf(stderr, "usb_control_msg: %d\n", ret);
+				} else {
+					ut->dwBytesTransferred = ret;
+					ret = 0;
+				}
+					
 #endif
 
 				fprintf(stderr,"Transferred: %lu (%s)\n",ut->dwBytesTransferred, (ut->fRead?"read":"write"));
@@ -321,9 +338,14 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					/* FIXME: Select right interface! */
 					ret = usb_claim_interface(usb_devhandle, usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber);
 					if (!ret) {
-						ret = usb_set_altinterface(usb_devhandle, usi->dwAlternateSetting);
-						if (ret)
-							fprintf(stderr, "usb_set_altinterface: %d\n", ret);
+						//ret = usb_set_configuration(usb_devhandle, usbdevice->config[0].bConfigurationValue);
+						if(!ret) {
+							ret = usb_set_altinterface(usb_devhandle, usi->dwAlternateSetting);
+							if (ret)
+								fprintf(stderr, "usb_set_altinterface: %d\n", ret);
+						} else {
+							fprintf(stderr, "usb_set_configuration: %d (%s)\n", ret, usb_strerror());
+						}
 					} else {
 						fprintf(stderr, "usb_claim_interface: %d -> %d (%s)\n", usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber, ret, usb_strerror());
 					}
