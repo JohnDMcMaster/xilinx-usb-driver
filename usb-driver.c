@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <usb.h>
 #include <signal.h>
+#include <pthread.h>
 #include "xilinx.h"
 
 static int (*ioctl_func) (int, int, void *) = NULL;
@@ -31,6 +32,7 @@ static struct usb_device *usbdevice;
 static usb_dev_handle *usb_devhandle = NULL;
 static unsigned long card_type;
 static int ints_enabled = 0;
+static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
 
 #define NO_WINDRVR 1
 #undef DEBUG
@@ -232,10 +234,12 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			break;
 
 		case CARD_REGISTER:
+			/* TODO: Implement for LPT-support */
+#if 0
 			{
-				//struct card_register* cr = (struct card_register*)(wdheader->data);
-				/* Todo: LPT-Port already in use */
+				struct card_register* cr = (struct card_register*)(wdheader->data);
 			}
+#endif
 #ifdef DEBUG
 			fprintf(stderr,"faking CARD_REGISTER\n");
 #endif
@@ -318,7 +322,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 				it->fEnableOk = 1;
 				ints_enabled = 1;
-				//ret = (*ioctl_func) (fd, request, wdioctl);
+				pthread_mutex_trylock(&int_wait);
 			}
 
 			break;
@@ -339,6 +343,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				it->dwCounter = 0;
 				it->fStopped = 1;
 				ints_enabled = 0;
+				pthread_mutex_unlock(&int_wait);
 #endif
 #ifdef DEBUG
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
@@ -366,7 +371,6 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					/* FIXME: Select right interface! */
 					ret = usb_claim_interface(usb_devhandle, usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber);
 					if (!ret) {
-						//ret = usb_set_configuration(usb_devhandle, usbdevice->config[0].bConfigurationValue);
 						if(!ret) {
 							ret = usb_set_altinterface(usb_devhandle, usi->dwAlternateSetting);
 							if (ret)
@@ -397,7 +401,6 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				fprintf(stderr, "unique: %lu, bytes: %lu, options: %lx\n", ugdd->dwUniqueID, ugdd->dwBytes, ugdd->dwOptions);
 #endif
 				pSize = ugdd->dwBytes;
-				//ret = (*ioctl_func) (fd, request, wdioctl);
 				if (!ugdd->dwBytes) {
 					if (usbdevice) {
 						ugdd->dwBytes = usb_deviceinfo(NULL);
@@ -508,10 +511,10 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					if (it->dwCounter == 0) {
 						it->dwCounter = 1;
 					} else {
-						while(ints_enabled) {sleep(1);}
+						pthread_mutex_lock(&int_wait);
 					}
 				} else {
-					while(ints_enabled) {sleep(1);}
+					pthread_mutex_lock(&int_wait);
 				}
 #endif
 
