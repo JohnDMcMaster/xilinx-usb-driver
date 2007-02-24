@@ -225,7 +225,6 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 		return (*ioctl_func) (fd, request, wdioctl);
 	}
 
-	fprintf(stderr,"PID %d: ",getpid());
 	switch(request) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
@@ -280,7 +279,6 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-				hexdump(wdheader->data, wdheader->size);
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 
 				it->fEnableOk = 1;
@@ -317,12 +315,18 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
 				if (usbdevice) {
-					int iface;
-
 					if (!usb_devhandle)
 						usb_devhandle = usb_open(usbdevice);
-//MGMG
-					ret = usb_claim_interface(usb_devhandle, iface);
+
+					/* FIXME: Select right interface! */
+					ret = usb_claim_interface(usb_devhandle, usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber);
+					if (!ret) {
+						ret = usb_set_altinterface(usb_devhandle, usi->dwAlternateSetting);
+						if (ret)
+							fprintf(stderr, "usb_set_altinterface: %d\n", ret);
+					} else {
+						fprintf(stderr, "usb_claim_interface: %d -> %d (%s)\n", usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber, ret, usb_strerror());
+					}
 				}
 #endif
 				fprintf(stderr,"unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n", usi->dwUniqueID, usi->dwInterfaceNum, usi->dwAlternateSetting, usi->dwOptions);
@@ -429,7 +433,6 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-				hexdump(wdheader->data, wdheader->size);
 				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
 
 #ifndef NO_WINDRVR
