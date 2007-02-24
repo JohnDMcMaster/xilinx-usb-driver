@@ -24,7 +24,7 @@
 
 static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = 0;
-static int modulesfd = 0;
+FILE *modulesfp;
 static int modules_read = 0;
 static struct usb_bus *busses = NULL;
 static struct usb_device *usbdevice;
@@ -582,6 +582,26 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	return ret;
 }
 
+int ioctl(int fd, int request, ...)
+{
+	va_list args;
+	void *argp;
+	int ret;
+
+	if (!ioctl_func)                                                                    
+		ioctl_func = (int (*) (int, int, void *)) dlsym (REAL_LIBC, "ioctl");             
+
+	va_start (args, request);
+	argp = va_arg (args, void *);
+	va_end (args);
+
+	if (fd == windrvrfd)
+		ret = do_wdioctl(fd, request, argp);
+	else
+		ret = (*ioctl_func) (fd, request, argp);
+
+	return ret;
+}
 
 typedef int (*open_funcptr_t) (const char *, int, mode_t);
 
@@ -637,13 +657,6 @@ int close(int fd) {
 		windrvrfd = 0;
 	}
 
-	if (fd == modulesfd) {
-#ifdef DEBUG
-		fprintf(stderr,"close modulesfd\n");
-#endif
-		modulesfd = 0;
-	}
-
 	return (*func) (fd);
 }
 
@@ -661,7 +674,7 @@ FILE *fopen(const char *path, const char *mode) {
 		fprintf(stderr,"opening /proc/modules\n");
 #endif
 #ifdef NO_WINDRVR
-		modulesfd = fileno(ret);
+		modulesfp = ret;
 		modules_read = 0;
 #endif
 	}
@@ -669,43 +682,38 @@ FILE *fopen(const char *path, const char *mode) {
 	return ret;
 }
 
-ssize_t read(int fd, void *buf, size_t count) {
-	size_t ret;
-	static ssize_t (*func) (int, void*, size_t) = NULL;
+char *fgets(char *s, int size, FILE *stream) {
+        static char* (*func) (char*, int, FILE*) = NULL;
 	const char modules[] = "windrvr6 160960 0 - Live 0xf98b0000\n";
+	char *ret = NULL;
+
 
 	if (!func)
-		func = (ssize_t (*) (int, void*, size_t)) dlsym(REAL_LIBC, "read");
+		func = (char* (*) (char*, int, FILE*)) dlsym(REAL_LIBC, "fgets");
 	
-	if ((!modules_read) && (fd == modulesfd)) {
-		strcpy(buf, modules);
-		ret = strlen(modules);
-		modules_read = 1;
+	if (modulesfp == stream) {
+		if (!modules_read) {
+			strcpy(s, modules);
+			ret = s;
+			modules_read = 1;
+		}
 	} else {
-		ret = (*func) (fd, buf, count);
+		ret = (*func)(s,size,stream);
 	}
 
 	return ret;
 }
 
-int ioctl(int fd, int request, ...)
-{
-	va_list args;
-	void *argp;
-	int ret;
+int fclose(FILE *fp) {
+	static int (*func) (FILE*) = NULL;
 
-	if (!ioctl_func)                                                                    
-		ioctl_func = (int (*) (int, int, void *)) dlsym (REAL_LIBC, "ioctl");             
+	if (!func)
+		func = (int (*) (FILE*)) dlsym(REAL_LIBC, "fclose");
 
-	va_start (args, request);
-	argp = va_arg (args, void *);
-	va_end (args);
-
-	if (fd == windrvrfd)
-		ret = do_wdioctl(fd, request, argp);
-	else
-		ret = (*ioctl_func) (fd, request, argp);
-
-	return ret;
+	if (fp == modulesfp) {
+		modulesfp = NULL;
+	}
+	
+	return (*func)(fp);
 }
 #endif
