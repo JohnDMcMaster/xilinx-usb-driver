@@ -21,7 +21,7 @@
 #include <usb.h>
 #include <signal.h>
 #include <pthread.h>
-#include "xilinx.h"
+#include "usb-driver.h"
 
 static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = 0;
