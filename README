@@ -1,0 +1,17 @@
+This library emulates Jungo Windrvr USB functions in userspace which are
+required by XILINX impact to access the Platform cable USB. With this library
+it is possible to access the cable without loading a proprietary kernel module
+which breaks with every new kernel release. It uses the USB functions provided
+by the libusb userspace library instead and should work on every kernel version
+which is supported by libusb. It was written against impact from ISE Webpack
+9.1SP1 and will very probably not work with older impact versions (<9.1).
+
+Build the library by calling `make'.
+
+To use this library you have to preload the library before starting impact:
+
+$ LD_PRELOAD=/path/to/libusb-driver.so impact
+or
+$ export LD_PRELOAD=/path/to/libusb-driver.so  (for sh shells)
+$ setenv LD_PRELOAD /path/to/libusb-driver.so  (for csh shells)
+$ impact
