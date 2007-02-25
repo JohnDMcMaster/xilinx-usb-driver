@@ -15,3 +15,7 @@ or
 $ export LD_PRELOAD=/path/to/libusb-driver.so  (for sh shells)
 $ setenv LD_PRELOAD /path/to/libusb-driver.so  (for csh shells)
 $ impact
+
+To use the device as ordinary user, put the following line in a new
+file in /etc/udev/rules.d/ and restart udev:
+ACTION=="add", BUS=="usb", SYSFS{idVendor}=="03fd", MODE="666"
