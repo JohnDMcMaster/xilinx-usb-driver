@@ -77,7 +77,7 @@ int usb_deviceinfo(unsigned char *buf) {
 		udi->Pipe0.dwNumber = 0x00;
 		udi->Pipe0.dwMaximumPacketSize = usbdevice->descriptor.bMaxPacketSize0;
 		udi->Pipe0.type = 0;
-		udi->Pipe0.direction = 3;
+		udi->Pipe0.direction = WDU_DIR_IN_OUT;
 		udi->Pipe0.dwInterval = 0;
 
 		pConfigs = &(udi->pConfigs);
