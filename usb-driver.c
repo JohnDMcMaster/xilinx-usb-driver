@@ -223,7 +223,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
 			strcpy(version->version, "WinDriver no more");
-			version->versionul = 999;
+			version->versionul = 802;
 #ifdef DEBUG
 			fprintf(stderr,"faking VERSION\n");
 #endif
