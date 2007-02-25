@@ -36,6 +36,7 @@
 #include <usb.h>
 #include <signal.h>
 #include <pthread.h>
+#include <errno.h>
 #include "usb-driver.h"
 
 static int (*ioctl_func) (int, int, void *) = NULL;
@@ -330,6 +331,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				it->dwLost, it->fStopped);
 
 				it->fEnableOk = 1;
+				it->fStopped = 0;
 				ints_enabled = 1;
 				pthread_mutex_trylock(&int_wait);
 			}
@@ -351,7 +353,8 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				it->dwCounter = 0;
 				it->fStopped = 1;
 				ints_enabled = 0;
-				pthread_mutex_unlock(&int_wait);
+				if (pthread_mutex_trylock(&int_wait) == EBUSY)
+					pthread_mutex_unlock(&int_wait);
 #endif
 				DPRINTF("Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
 				it->hInterrupt, it->dwOptions,
