@@ -687,7 +687,7 @@ FILE *fopen(const char *path, const char *mode) {
 
 char *fgets(char *s, int size, FILE *stream) {
         static char* (*func) (char*, int, FILE*) = NULL;
-	const char modules[] = "windrvr6 160960 0 - Live 0xf98b0000\n";
+	const char modules[][256] = {"windrvr6 1 0 - Live 0xdeadbeef\n", "parport_pc 1 0 - Live 0xdeadbeef\n"};
 	char *ret = NULL;
 
 
@@ -695,10 +695,10 @@ char *fgets(char *s, int size, FILE *stream) {
 		func = (char* (*) (char*, int, FILE*)) dlsym(REAL_LIBC, "fgets");
 	
 	if (modulesfp == stream) {
-		if (!modules_read) {
-			strcpy(s, modules);
+		if (modules_read < sizeof(modules)) {
+			strcpy(s, modules[modules_read]);
 			ret = s;
-			modules_read = 1;
+			modules_read++;
 		}
 	} else {
 		ret = (*func)(s,size,stream);
