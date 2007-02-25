@@ -1,12 +1,27 @@
-#if defined(__GNUC__) && !defined(__STRICT_ANSI__)
+/* libusb connector for XILINX impact
+ *
+ * Copyright (c) 2007 Michael Gernoth <michael@gernoth.net>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to
+ * deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
 
 #define _GNU_SOURCE 1
-
-#if defined(RTLD_NEXT)
-#define REAL_LIBC RTLD_NEXT
-#else
-#define REAL_LIBC ((void *) -1L)
-#endif
 
 #include <dlfcn.h>
 #include <stdarg.h>
@@ -38,6 +53,7 @@ static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
 #undef DEBUG
 
 #ifdef DEBUG
+#define DPRINTF(format, args...) fprintf(stderr, format, ##args)
 void hexdump(unsigned char *buf, int len) {
 	int i;
 
@@ -46,7 +62,10 @@ void hexdump(unsigned char *buf, int len) {
 		if ((i % 16) == 15)
 			fprintf(stderr,"\n");
 	}
+	fprintf(stderr,"\n");
 }
+#else
+#define DPRINTF(format, args...)
 #endif
 
 int usb_deviceinfo(unsigned char *buf) {
@@ -224,15 +243,11 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			version = (struct version_struct*)(wdheader->data);
 			strcpy(version->version, "WinDriver no more");
 			version->versionul = 802;
-#ifdef DEBUG
-			fprintf(stderr,"faking VERSION\n");
-#endif
+			DPRINTF("VERSION\n");
 			break;
 
 		case LICENSE:
-#ifdef DEBUG
-			fprintf(stderr,"faking LICENSE\n");
-#endif
+			DPRINTF("LICENSE\n");
 			break;
 
 		case CARD_REGISTER:
@@ -242,28 +257,24 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				struct card_register* cr = (struct card_register*)(wdheader->data);
 			}
 #endif
-#ifdef DEBUG
-			fprintf(stderr,"faking CARD_REGISTER\n");
-#endif
+			DPRINTF("CARD_REGISTER\n");
 			break;
 
 		case USB_TRANSFER:
-#ifdef DEBUG
-			fprintf(stderr,"in USB_TRANSFER");
-#endif
+			DPRINTF("in USB_TRANSFER");
 			{
 				struct usb_transfer *ut = (struct usb_transfer*)(wdheader->data);
 
 #ifdef DEBUG
-				fprintf(stderr," unique: %lu, pipe: %lu, read: %lu, options: %lx, size: %lu, timeout: %lx\n", ut->dwUniqueID, ut->dwPipeNum, ut->fRead, ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
-				fprintf(stderr,"setup packet: ");
+				DPRINTF(" unique: %lu, pipe: %lu, read: %lu, options: %lx, size: %lu, timeout: %lx\n",
+				ut->dwUniqueID, ut->dwPipeNum, ut->fRead,
+				ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
+				DPRINTF("setup packet: ");
 				hexdump(ut->SetupPacket, 8);
-				fprintf(stderr,"\n");
 
 				if (!ut->fRead && ut->dwBufferSize)
 				{
 					hexdump(ut->pBuffer, ut->dwBufferSize);
-					fprintf(stderr,"\n");
 				}
 #endif
 
@@ -278,9 +289,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					value = ut->SetupPacket[2] | (ut->SetupPacket[3] << 8);
 					index = ut->SetupPacket[4] | (ut->SetupPacket[5] << 8);
 					size = ut->SetupPacket[6] | (ut->SetupPacket[7] << 8);
-#ifdef DEBUG
-					fprintf(stderr, "requesttype: %x, request: %x, value: %u, index: %u, size: %u\n", requesttype, request, value, index, size);
-#endif
+					DPRINTF("requesttype: %x, request: %x, value: %u, index: %u, size: %u\n", requesttype, request, value, index, size);
 					ret = usb_control_msg(usb_devhandle, requesttype, request, value, index, ut->pBuffer, size, ut->dwTimeout);
 				} else {
 					if (ut->fRead) {
@@ -300,27 +309,25 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #endif
 
 #ifdef DEBUG
-				fprintf(stderr,"Transferred: %lu (%s)\n",ut->dwBytesTransferred, (ut->fRead?"read":"write"));
+				DPRINTF("Transferred: %lu (%s)\n",ut->dwBytesTransferred, (ut->fRead?"read":"write"));
 				if (ut->fRead && ut->dwBytesTransferred)
 				{
-					fprintf(stderr,"Read: ");
+					DPRINTF("Read: ");
 					hexdump(ut->pBuffer, ut->dwBytesTransferred);
-					fprintf(stderr,"\n");
 				}
 #endif
 			}
 			break;
 
 		case INT_ENABLE:
-#ifdef DEBUG
-			fprintf(stderr,"INT_ENABLE\n");
-#endif
+			DPRINTF("INT_ENABLE\n");
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-#ifdef DEBUG
-				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
-#endif
+				DPRINTF("Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
+				it->hInterrupt, it->dwOptions,
+				it->dwCmds, it->fEnableOk, it->dwCounter,
+				it->dwLost, it->fStopped);
 
 				it->fEnableOk = 1;
 				ints_enabled = 1;
@@ -330,15 +337,14 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			break;
 			
 		case INT_DISABLE:
-#ifdef DEBUG
-			fprintf(stderr,"INT_DISABLE\n");
-#endif
+			DPRINTF("INT_DISABLE\n");
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-#ifdef DEBUG
-				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
-#endif
+				DPRINTF("Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
+				it->hInterrupt, it->dwOptions,
+				it->dwCmds, it->fEnableOk, it->dwCounter,
+				it->dwLost, it->fStopped);
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
@@ -347,22 +353,21 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ints_enabled = 0;
 				pthread_mutex_unlock(&int_wait);
 #endif
-#ifdef DEBUG
-				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
-#endif
+				DPRINTF("Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
+				it->hInterrupt, it->dwOptions,
+				it->dwCmds, it->fEnableOk, it->dwCounter,
+				it->dwLost, it->fStopped);
 			}
 			break;
 
 		case USB_SET_INTERFACE:
-#ifdef DEBUG
-			fprintf(stderr,"USB_SET_INTERFACE\n");
-#endif
+			DPRINTF("USB_SET_INTERFACE\n");
 			{
 				struct usb_set_interface *usi = (struct usb_set_interface*)(wdheader->data);
 
-#ifdef DEBUG
-				fprintf(stderr,"unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n", usi->dwUniqueID, usi->dwInterfaceNum, usi->dwAlternateSetting, usi->dwOptions);
-#endif
+				DPRINTF("unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n",
+				usi->dwUniqueID, usi->dwInterfaceNum,
+				usi->dwAlternateSetting, usi->dwOptions);
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
@@ -381,27 +386,28 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 							fprintf(stderr, "usb_set_configuration: %d (%s)\n", ret, usb_strerror());
 						}
 					} else {
-						fprintf(stderr, "usb_claim_interface: %d -> %d (%s)\n", usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber, ret, usb_strerror());
+						fprintf(stderr, "usb_claim_interface: %d -> %d (%s)\n",
+						usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber,
+						ret, usb_strerror());
 					}
 				}
 #endif
-#ifdef DEBUG
-				fprintf(stderr,"unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n", usi->dwUniqueID, usi->dwInterfaceNum, usi->dwAlternateSetting, usi->dwOptions);
-#endif
+				DPRINTF("unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n",
+				usi->dwUniqueID, usi->dwInterfaceNum,
+				usi->dwAlternateSetting, usi->dwOptions);
 			}
 			break;
 
 		case USB_GET_DEVICE_DATA:
-#ifdef DEBUG
-			fprintf(stderr,"faking USB_GET_DEVICE_DATA\n");
-#endif
+			DPRINTF("USB_GET_DEVICE_DATA\n");
 			{
 				struct usb_get_device_data *ugdd = (struct usb_get_device_data*)(wdheader->data);
 				int pSize;
 
-#ifdef DEBUG
-				fprintf(stderr, "unique: %lu, bytes: %lu, options: %lx\n", ugdd->dwUniqueID, ugdd->dwBytes, ugdd->dwOptions);
-#endif
+				DPRINTF("unique: %lu, bytes: %lu, options: %lx\n",
+				ugdd->dwUniqueID, ugdd->dwBytes,
+				ugdd->dwOptions);
+
 				pSize = ugdd->dwBytes;
 				if (!ugdd->dwBytes) {
 					if (usbdevice) {
@@ -414,21 +420,31 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			break;
 
 		case EVENT_REGISTER:
-#ifdef DEBUG
-			fprintf(stderr,"EVENT_REGISTER\n");
-#endif
+			DPRINTF("EVENT_REGISTER\n");
 			{
 				struct event *e = (struct event*)(wdheader->data);
 				struct usb_bus *bus;
 				int i;
 
-#ifdef DEBUG
-				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
-#endif
+				DPRINTF("handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n",
+				e->handle, e->dwAction,
+				e->dwStatus, e->dwEventId, e->dwCardType,
+				e->hKernelPlugIn, e->dwOptions,
+				e->u.Usb.deviceId.dwVendorId,
+				e->u.Usb.deviceId.dwProductId,
+				e->u.Usb.dwUniqueID, e->dwEventVer,
+				e->dwNumMatchTables);
+
 				for (i = 0; i < e->dwNumMatchTables; i++) {
-#ifdef DEBUG
-					fprintf(stderr,"match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
-#endif
+
+					DPRINTF("match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n",
+					e->matchTables[i].VendorId,
+					e->matchTables[i].ProductId,
+					e->matchTables[i].bDeviceClass,
+					e->matchTables[i].bDeviceSubClass,
+					e->matchTables[i].bInterfaceClass,
+					e->matchTables[i].bInterfaceSubClass,
+					e->matchTables[i].bInterfaceProtocol);
 
 					for (bus = busses; bus; bus = bus->next) {
 						struct usb_device *dev;
@@ -446,15 +462,16 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 									   int ai;
 
 									   for (ai = 0; ai < interface->num_altsetting; ai++) {
-#ifdef DEBUG
-										   fprintf(stderr, "intclass: %x, intsubclass: %x, intproto: %x\n", interface->altsetting[i].bInterfaceClass, interface->altsetting[i].bInterfaceSubClass, interface->altsetting[i].bInterfaceProtocol);
-#endif
+
+										   DPRINTF("intclass: %x, intsubclass: %x, intproto: %x\n",
+										   interface->altsetting[i].bInterfaceClass,
+										   interface->altsetting[i].bInterfaceSubClass,
+										   interface->altsetting[i].bInterfaceProtocol);
+
 										   if ((interface->altsetting[ai].bInterfaceSubClass == e->matchTables[i].bInterfaceSubClass) &&
 												   (interface->altsetting[ai].bInterfaceProtocol == e->matchTables[i].bInterfaceProtocol)){
 											   /* TODO: check interfaceClass! */
-#ifdef DEBUG
-											   fprintf(stderr,"!!!FOUND DEVICE WITH LIBUSB!!!\n");
-#endif
+											   DPRINTF("found device with libusb\n");
 											   usbdevice = dev;
 											   card_type = e->dwCardType;
 										   }
@@ -472,39 +489,51 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #endif
 
 #ifdef DEBUG
-				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
+				DPRINTF("handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n",
+				e->handle, e->dwAction,
+				e->dwStatus, e->dwEventId, e->dwCardType,
+				e->hKernelPlugIn, e->dwOptions,
+				e->u.Usb.deviceId.dwVendorId,
+				e->u.Usb.deviceId.dwProductId,
+				e->u.Usb.dwUniqueID, e->dwEventVer,
+				e->dwNumMatchTables);
+
 				for (i = 0; i < e->dwNumMatchTables; i++)
-					fprintf(stderr,"match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
+					DPRINTF("match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n",
+					e->matchTables[i].VendorId,
+					e->matchTables[i].ProductId,
+					e->matchTables[i].bDeviceClass,
+					e->matchTables[i].bDeviceSubClass,
+					e->matchTables[i].bInterfaceClass,
+					e->matchTables[i].bInterfaceSubClass,
+					e->matchTables[i].bInterfaceProtocol);
 #endif
 			}
 			break;
 
 		case TRANSFER:
-			fprintf(stderr,"TRANSFER\n");
+			DPRINTF("TRANSFER\n");
 #ifndef NO_WINDRVR
 			ret = (*ioctl_func) (fd, request, wdioctl);
 #endif
 			break;
 
 		case EVENT_UNREGISTER:
-#ifdef DEBUG
-			fprintf(stderr,"EVENT_UNREGISTER\n");
-#endif
+			DPRINTF("EVENT_UNREGISTER\n");
 #ifndef NO_WINDRVR
 			ret = (*ioctl_func) (fd, request, wdioctl);
 #endif
 			break;
 
 		case INT_WAIT:
-#ifdef DEBUG
-			fprintf(stderr,"INT_WAIT\n");
-#endif
+			DPRINTF("INT_WAIT\n");
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-#ifdef DEBUG
-				fprintf(stderr,"Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
-#endif
+				DPRINTF("Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
+				it->hInterrupt, it->dwOptions,
+				it->dwCmds, it->fEnableOk, it->dwCounter,
+				it->dwLost, it->fStopped);
 
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
@@ -522,31 +551,44 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				}
 #endif
 
-#ifdef DEBUG
-				fprintf(stderr,"INT_WAIT_RETURN: Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n", it->hInterrupt, it->dwOptions, it->dwCmds, it->fEnableOk, it->dwCounter, it->dwLost, it->fStopped);
-#endif
+				DPRINTF("INT_WAIT_RETURN: Handle: %lu, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
+				it->hInterrupt, it->dwOptions, it->dwCmds,
+				it->fEnableOk, it->dwCounter, it->dwLost,
+				it->fStopped);
 			}
 			break;
 
 		case CARD_UNREGISTER:
-			fprintf(stderr,"CARD_UNREGISTER\n");
+			DPRINTF("CARD_UNREGISTER\n");
 #ifndef NO_WINDRVR
 			ret = (*ioctl_func) (fd, request, wdioctl);
 #endif
 			break;
 
 		case EVENT_PULL:
-#ifdef DEBUG
-			fprintf(stderr,"EVENT_PULL\n");
-#endif
+			DPRINTF("EVENT_PULL\n");
 			{
 				struct event *e = (struct event*)(wdheader->data);
 #ifdef DEBUG
 				int i;
 
-				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lx, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
+				DPRINTF("handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lx, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n",
+				e->handle, e->dwAction, e->dwStatus,
+				e->dwEventId, e->dwCardType, e->hKernelPlugIn,
+				e->dwOptions, e->u.Usb.deviceId.dwVendorId,
+				e->u.Usb.deviceId.dwProductId,
+				e->u.Usb.dwUniqueID, e->dwEventVer,
+				e->dwNumMatchTables);
+
 				for (i = 0; i < e->dwNumMatchTables; i++)
-					fprintf(stderr,"match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
+					DPRINTF("match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n",
+					e->matchTables[i].VendorId,
+					e->matchTables[i].ProductId,
+					e->matchTables[i].bDeviceClass,
+					e->matchTables[i].bDeviceSubClass,
+					e->matchTables[i].bInterfaceClass,
+					e->matchTables[i].bInterfaceSubClass,
+					e->matchTables[i].bInterfaceProtocol);
 #endif
 
 #ifndef NO_WINDRVR
@@ -570,9 +612,23 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #endif
 
 #ifdef DEBUG
-				fprintf(stderr,"handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lx, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n", e->handle, e->dwAction, e->dwStatus, e->dwEventId, e->dwCardType, e->hKernelPlugIn, e->dwOptions, e->u.Usb.deviceId.dwVendorId, e->u.Usb.deviceId.dwProductId, e->u.Usb.dwUniqueID, e->dwEventVer, e->dwNumMatchTables);
+				DPRINTF("handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lx, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n",
+				e->handle, e->dwAction, e->dwStatus,
+				e->dwEventId, e->dwCardType, e->hKernelPlugIn,
+				e->dwOptions, e->u.Usb.deviceId.dwVendorId,
+				e->u.Usb.deviceId.dwProductId,
+				e->u.Usb.dwUniqueID, e->dwEventVer,
+				e->dwNumMatchTables);
+
 				for (i = 0; i < e->dwNumMatchTables; i++)
-					fprintf(stderr,"match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n", e->matchTables[i].VendorId, e->matchTables[i].ProductId, e->matchTables[i].bDeviceClass, e->matchTables[i].bDeviceSubClass, e->matchTables[i].bInterfaceClass, e->matchTables[i].bInterfaceSubClass, e->matchTables[i].bInterfaceProtocol);
+					DPRINTF("match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n",
+					e->matchTables[i].VendorId,
+					e->matchTables[i].ProductId,
+					e->matchTables[i].bDeviceClass,
+					e->matchTables[i].bDeviceSubClass,
+					e->matchTables[i].bInterfaceClass,
+					e->matchTables[i].bInterfaceSubClass,
+					e->matchTables[i].bInterfaceProtocol);
 #endif
 
 			}
@@ -595,7 +651,7 @@ int ioctl(int fd, int request, ...) {
 	int ret;
 
 	if (!ioctl_func)                                                                    
-		ioctl_func = (int (*) (int, int, void *)) dlsym (REAL_LIBC, "ioctl");             
+		ioctl_func = (int (*) (int, int, void *)) dlsym (RTLD_NEXT, "ioctl");             
 
 	va_start (args, request);
 	argp = va_arg (args, void *);
@@ -616,7 +672,7 @@ int open (const char *pathname, int flags, ...) {
 	int fd;
 
 	if (!func)
-		func = (int (*) (const char *, int, mode_t)) dlsym (REAL_LIBC, "open");
+		func = (int (*) (const char *, int, mode_t)) dlsym (RTLD_NEXT, "open");
 
 	if (flags & O_CREAT) {
 		va_start(args, flags);
@@ -625,9 +681,7 @@ int open (const char *pathname, int flags, ...) {
 	}
 
 	if (!strcmp (pathname, "/dev/windrvr6")) {
-#ifdef DEBUG
-		fprintf(stderr,"opening windrvr6\n");
-#endif
+		DPRINTF("opening windrvr6\n");
 #ifdef NO_WINDRVR
 		windrvrfd = fd = (*func) ("/dev/null", flags, mode);
 #else
@@ -651,12 +705,10 @@ int close(int fd) {
 	static int (*func) (int) = NULL;
 
 	if (!func)
-		func = (int (*) (int)) dlsym(REAL_LIBC, "close");
+		func = (int (*) (int)) dlsym(RTLD_NEXT, "close");
 	
 	if (fd == windrvrfd) {
-#ifdef DEBUG
-		fprintf(stderr,"close windrvrfd\n");
-#endif
+		DPRINTF("close windrvrfd\n");
 		windrvrfd = 0;
 	}
 
@@ -668,14 +720,12 @@ FILE *fopen(const char *path, const char *mode) {
 	static FILE* (*func) (const char*, const char*) = NULL;
 
 	if (!func)
-		func = (FILE* (*) (const char*, const char*)) dlsym(REAL_LIBC, "fopen");
+		func = (FILE* (*) (const char*, const char*)) dlsym(RTLD_NEXT, "fopen");
 
 	ret = (*func) (path, mode);
 
 	if (!strcmp (path, "/proc/modules")) {
-#ifdef DEBUG
-		fprintf(stderr,"opening /proc/modules\n");
-#endif
+		DPRINTF("opening /proc/modules\n");
 #ifdef NO_WINDRVR
 		modulesfp = ret;
 		modules_read = 0;
@@ -692,7 +742,7 @@ char *fgets(char *s, int size, FILE *stream) {
 
 
 	if (!func)
-		func = (char* (*) (char*, int, FILE*)) dlsym(REAL_LIBC, "fgets");
+		func = (char* (*) (char*, int, FILE*)) dlsym(RTLD_NEXT, "fgets");
 	
 	if (modulesfp == stream) {
 		if (modules_read < sizeof(modules)) {
@@ -711,7 +761,7 @@ int fclose(FILE *fp) {
 	static int (*func) (FILE*) = NULL;
 
 	if (!func)
-		func = (int (*) (FILE*)) dlsym(REAL_LIBC, "fclose");
+		func = (int (*) (FILE*)) dlsym(RTLD_NEXT, "fclose");
 
 	if (fp == modulesfp) {
 		modulesfp = NULL;
@@ -724,7 +774,7 @@ int access(const char *pathname, int mode) {
 	static int (*func) (const char*, int);
 
 	if (!func)
-		func = (int (*) (const char*, int)) dlsym(REAL_LIBC, "access");
+		func = (int (*) (const char*, int)) dlsym(RTLD_NEXT, "access");
 	
 	if (!strcmp(pathname, "/dev/windrvr6")) {
 		return 0;
@@ -732,4 +782,3 @@ int access(const char *pathname, int mode) {
 		return (*func)(pathname, mode);
 	}
 }
-#endif
