@@ -37,6 +37,7 @@ static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
 #define NO_WINDRVR 1
 #undef DEBUG
 
+#ifdef DEBUG
 void hexdump(unsigned char *buf, int len) {
 	int i;
 
@@ -46,6 +47,7 @@ void hexdump(unsigned char *buf, int len) {
 			fprintf(stderr,"\n");
 	}
 }
+#endif
 
 int usb_deviceinfo(unsigned char *buf) {
 	int i,j,k,l;
@@ -512,9 +514,11 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 						it->dwCounter = 1;
 					} else {
 						pthread_mutex_lock(&int_wait);
+						pthread_mutex_unlock(&int_wait);
 					}
 				} else {
 					pthread_mutex_lock(&int_wait);
+					pthread_mutex_unlock(&int_wait);
 				}
 #endif
 
@@ -585,8 +589,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	return ret;
 }
 
-int ioctl(int fd, int request, ...)
-{
+int ioctl(int fd, int request, ...) {
 	va_list args;
 	void *argp;
 	int ret;
@@ -606,17 +609,14 @@ int ioctl(int fd, int request, ...)
 	return ret;
 }
 
-typedef int (*open_funcptr_t) (const char *, int, mode_t);
-
-int open (const char *pathname, int flags, ...)
-{
-	static open_funcptr_t func = NULL;
+int open (const char *pathname, int flags, ...) {
+	static int (*func) (const char *, int, mode_t) = NULL;
 	mode_t mode = 0;
 	va_list args;
 	int fd;
 
 	if (!func)
-		func = (open_funcptr_t) dlsym (REAL_LIBC, "open");
+		func = (int (*) (const char *, int, mode_t)) dlsym (REAL_LIBC, "open");
 
 	if (flags & O_CREAT) {
 		va_start(args, flags);
