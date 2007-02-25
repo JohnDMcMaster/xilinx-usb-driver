@@ -719,4 +719,17 @@ int fclose(FILE *fp) {
 	
 	return (*func)(fp);
 }
+
+int access(const char *pathname, int mode) {
+	static int (*func) (const char*, int);
+
+	if (!func)
+		func = (int (*) (const char*, int)) dlsym(REAL_LIBC, "access");
+	
+	if (!strcmp(pathname, "/dev/windrvr6")) {
+		return 0;
+	} else {
+		return (*func)(pathname, mode);
+	}
+}
 #endif
