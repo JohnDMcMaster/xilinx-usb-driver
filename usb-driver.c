@@ -40,8 +40,8 @@
 #include "usb-driver.h"
 
 static int (*ioctl_func) (int, int, void *) = NULL;
-static int windrvrfd = 0;
-FILE *modulesfp;
+static int windrvrfd = -1;
+FILE *modulesfp = NULL;
 static int modules_read = 0;
 static struct usb_bus *busses = NULL;
 static struct usb_device *usbdevice;
@@ -660,7 +660,7 @@ int ioctl(int fd, int request, ...) {
 	argp = va_arg (args, void *);
 	va_end (args);
 
-	if (windrvrfd && (fd == windrvrfd))
+	if (fd == windrvrfd)
 		ret = do_wdioctl(fd, request, argp);
 	else
 		ret = (*ioctl_func) (fd, request, argp);
@@ -712,7 +712,7 @@ int close(int fd) {
 	
 	if (fd == windrvrfd) {
 		DPRINTF("close windrvrfd\n");
-		windrvrfd = 0;
+		windrvrfd = -1;
 	}
 
 	return (*func) (fd);
