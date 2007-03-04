@@ -19,3 +19,26 @@ $ impact
 To use the device as ordinary user, put the following line in a new
 file in /etc/udev/rules.d/ and restart udev:
 ACTION=="add", BUS=="usb", SYSFS{idVendor}=="03fd", MODE="666"
+
+
+If your cable does not have the ID 03fd:0008 in the output of lsusb,
+the initial firmware has not been loaded (loading it changes the
+product-ID from another value to 8). To load the firmware follow
+these steps:
+
+1. If you have no /etc/udev/rules.d/xusbdfwu.rules file, create one with the
+   following content:
+# version 0001
+SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="0008", NAME="windrvr6"
+BUS=="usb", ACTION=="add", SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="0007", RUN+="/sbin/fxload -v -t fx2 -I /usr/share/xusbdfwu.hex -D $TEMPNODE"
+BUS=="usb", ACTION=="add", SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="0009", RUN+="/sbin/fxload -v -t fx2 -I /usr/share/xusbdfwu.hex -D $TEMPNODE"
+BUS=="usb", ACTION=="add", SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="000b", RUN+="/sbin/fxload -v -t fx2 -I /usr/share/xusbdfwu.hex -D $TEMPNODE"
+BUS=="usb", ACTION=="add", SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="000d", RUN+="/sbin/fxload -v -t fx2 -I /usr/share/xusbdfwu.hex -D $TEMPNODE"
+BUS=="usb", ACTION=="add", SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="000f", RUN+="/sbin/fxload -v -t fx2 -I /usr/share/xusbdfwu.hex -D $TEMPNODE"
+
+2. Install the package containing /sbin/fxload from your linux distribution.
+   It is usually called "fxload"
+
+3. copy the file /path/to/ISE/bin/lin/xusbdfwu.hex to /usr/share/xusbdfwu.hex
+
+4. restart udev and re-plug the cable
