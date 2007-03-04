@@ -660,7 +660,7 @@ int ioctl(int fd, int request, ...) {
 	argp = va_arg (args, void *);
 	va_end (args);
 
-	if (fd == windrvrfd)
+	if (windrvrfd && (fd == windrvrfd))
 		ret = do_wdioctl(fd, request, argp);
 	else
 		ret = (*ioctl_func) (fd, request, argp);
