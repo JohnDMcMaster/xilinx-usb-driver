@@ -26,15 +26,8 @@ the initial firmware has not been loaded (loading it changes the
 product-ID from another value to 8). To load the firmware follow
 these steps:
 
-1. If you have no /etc/udev/rules.d/xusbdfwu.rules file, create one with the
-   following content:
-# version 0001
-SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="0008", NAME="windrvr6"
-BUS=="usb", ACTION=="add", SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="0007", RUN+="/sbin/fxload -v -t fx2 -I /usr/share/xusbdfwu.hex -D $TEMPNODE"
-BUS=="usb", ACTION=="add", SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="0009", RUN+="/sbin/fxload -v -t fx2 -I /usr/share/xusbdfwu.hex -D $TEMPNODE"
-BUS=="usb", ACTION=="add", SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="000b", RUN+="/sbin/fxload -v -t fx2 -I /usr/share/xusbdfwu.hex -D $TEMPNODE"
-BUS=="usb", ACTION=="add", SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="000d", RUN+="/sbin/fxload -v -t fx2 -I /usr/share/xusbdfwu.hex -D $TEMPNODE"
-BUS=="usb", ACTION=="add", SYSFS{idVendor}=="03fd", SYSFS{idProduct}=="000f", RUN+="/sbin/fxload -v -t fx2 -I /usr/share/xusbdfwu.hex -D $TEMPNODE"
+1. If you have no /etc/udev/rules.d/xusbdfwu.rules file, copy it from
+   /path/to/ISE/bin/lin/xusbdfwu.rules to /etc/udev/rules.d/xusbdfwu.rules
 
 2. Install the package containing /sbin/fxload from your linux distribution.
    It is usually called "fxload"
