@@ -47,7 +47,7 @@ static int modules_read = 0;
 static struct usb_bus *busses = NULL;
 static struct usb_device *usbdevice;
 static usb_dev_handle *usb_devhandle = NULL;
-static uint32_t card_type;
+static unsigned long card_type;
 static int ints_enabled = 0;
 static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
 
