@@ -1,3 +1,4 @@
+#if __WORDSIZE == 32
 #define VERSION			0x910
 #define LICENSE			0x952
 #define TRANSFER		0x98c
@@ -12,6 +13,22 @@
 #define INT_ENABLE		0x98e
 #define EVENT_PULL		0x988
 #define USB_SET_INTERFACE	0x981
+#else
+#define VERSION			0xc0000910
+#define LICENSE			0xc0000952
+#define TRANSFER		0xc000098c
+#define USB_TRANSFER		0xc0000983
+#define EVENT_UNREGISTER	0xc0000987
+#define INT_DISABLE		0xc000091f
+#define INT_WAIT		0xc000094b
+#define CARD_REGISTER		0xc00009a4
+#define EVENT_REGISTER		0xc00009a5
+#define CARD_UNREGISTER		0xc000092b
+#define USB_GET_DEVICE_DATA	0xc00009a7
+#define INT_ENABLE		0xc000098e
+#define EVENT_PULL		0xc0000988
+#define USB_SET_INTERFACE	0xc0000981
+#endif
 
 #define MAGIC 0xa410b413UL
 

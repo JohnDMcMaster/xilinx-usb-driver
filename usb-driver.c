@@ -52,7 +52,6 @@ static int ints_enabled = 0;
 static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
 
 #define NO_WINDRVR 1
-/* #define DEBUG 1 */
 
 #ifdef DEBUG
 #define DPRINTF(format, args...) fprintf(stderr, format, ##args)
