@@ -15,18 +15,18 @@
 
 #define MAGIC 0xa410b413UL
 
-#define WDU_GET_MAX_PACKET_SIZE(x)                ((unsigned short) (((x) & 0x7ff) * (1 + (((x) & 0x1800) >> 11))))
+#define WDU_GET_MAX_PACKET_SIZE(x)                ((uint16_t) (((x) & 0x7ff) * (1 + (((x) & 0x1800) >> 11))))
 
 /* http://www.jungo.com/support/documentation/windriver/811/wdusb_man_mhtml/node78.html#SECTION001734000000000000000 */
 
 struct header_struct {
-	unsigned long magic;
+	uint32_t magic;
 	void* data;
-	unsigned long size;
+	uint32_t size;
 };
 
 struct version_struct {
-	unsigned long versionul;
+	uint32_t versionul;
 	char version[128];
 };
 
@@ -34,68 +34,68 @@ struct license_struct {
 	char cLicense[128]; // Buffer with license string to put.
 	// If empty string then get current license setting
 	// into dwLicense.
-	unsigned long dwLicense;  // Returns license settings: LICENSE_DEMO, LICENSE_WD
+	uint32_t dwLicense;  // Returns license settings: LICENSE_DEMO, LICENSE_WD
 	// etc..., or 0 for invalid license.
-	unsigned long dwLicense2; // Returns additional license settings, if dwLicense
+	uint32_t dwLicense2; // Returns additional license settings, if dwLicense
 	// could not hold all the information.
 	// Then dwLicense will return 0.
 };
 
 typedef struct
 {
-	unsigned long dwVendorId;
-	unsigned long dwDeviceId;
+	uint32_t dwVendorId;
+	uint32_t dwDeviceId;
 } WD_PCI_ID;
 
 typedef struct
 {
-	unsigned long dwBus;
-	unsigned long dwSlot;
-	unsigned long dwFunction;
+	uint32_t dwBus;
+	uint32_t dwSlot;
+	uint32_t dwFunction;
 } WD_PCI_SLOT;
 
 typedef struct
 {
-	unsigned long dwVendorId;
-	unsigned long dwProductId;
+	uint32_t dwVendorId;
+	uint32_t dwProductId;
 } WD_USB_ID;
 
 typedef struct
 {
-	unsigned short VendorId;
-	unsigned short ProductId;
-	unsigned char bDeviceClass;
-	unsigned char bDeviceSubClass;
-	unsigned char bInterfaceClass;
-	unsigned char bInterfaceSubClass;
-	unsigned char bInterfaceProtocol;
+	uint16_t VendorId;
+	uint16_t ProductId;
+	uint8_t bDeviceClass;
+	uint8_t bDeviceSubClass;
+	uint8_t bInterfaceClass;
+	uint8_t bInterfaceSubClass;
+	uint8_t bInterfaceProtocol;
 } WDU_MATCH_TABLE;
 
 typedef struct
 {
-	unsigned long dwNumber;        // Pipe 0 is the default pipe
-	unsigned long dwMaximumPacketSize;
-	unsigned long type;            // USB_PIPE_TYPE
-	unsigned long direction;       // WDU_DIR
+	uint32_t dwNumber;        // Pipe 0 is the default pipe
+	uint32_t dwMaximumPacketSize;
+	uint32_t type;            // USB_PIPE_TYPE
+	uint32_t direction;       // WDU_DIR
 	// Isochronous, Bulk, Interrupt are either USB_DIR_IN or USB_DIR_OUT
 	// Control are USB_DIR_IN_OUT
-	unsigned long dwInterval;      // interval in ms relevant to Interrupt pipes
+	uint32_t dwInterval;      // interval in ms relevant to Interrupt pipes
 } WD_USB_PIPE_INFO, WD_USB_PIPE_INFO_V43, WDU_PIPE_INFO;
 
 #define WD_USB_MAX_PIPE_NUMBER 32
 
 typedef struct
 {
-	unsigned long dwPipes;
+	uint32_t dwPipes;
 	WD_USB_PIPE_INFO Pipe[WD_USB_MAX_PIPE_NUMBER];
 } WD_USB_DEVICE_INFO, WD_USB_DEVICE_INFO_V43;
 
 struct usb_transfer
 {
-	unsigned long dwUniqueID;
-	unsigned long dwPipeNum;    // Pipe number on device.
-	unsigned long fRead;        // TRUE for read (IN) transfers; FALSE for write (OUT) transfers.
-	unsigned long dwOptions;    // USB_TRANSFER options:
+	uint32_t dwUniqueID;
+	uint32_t dwPipeNum;    // Pipe number on device.
+	uint32_t fRead;        // TRUE for read (IN) transfers; FALSE for write (OUT) transfers.
+	uint32_t dwOptions;    // USB_TRANSFER options:
 	// USB_ISOCH_FULL_PACKETS_ONLY - For isochronous
 	// transfers only. If set, only full packets will be
 	// transmitted and the transfer function will return
@@ -104,23 +104,23 @@ struct usb_transfer
 	// function will return without transmitting the
 	// remaining bytes).
 	void* pBuffer;    // Pointer to buffer to read/write.
-	unsigned long dwBufferSize; // Amount of bytes to transfer.
-	unsigned long dwBytesTransferred; // Returns the number of bytes actually read/written
-	unsigned char SetupPacket[8];          // Setup packet for control pipe transfer.
-	unsigned long dwTimeout;    // Timeout for the transfer in milliseconds. Set to 0 for infinite wait.
+	uint32_t dwBufferSize; // Amount of bytes to transfer.
+	uint32_t dwBytesTransferred; // Returns the number of bytes actually read/written
+	uint8_t SetupPacket[8];          // Setup packet for control pipe transfer.
+	uint32_t dwTimeout;    // Timeout for the transfer in milliseconds. Set to 0 for infinite wait.
 };
 
 
 
 
 struct event {
-	unsigned long handle;
-	unsigned long dwAction; // WD_EVENT_ACTION
-	unsigned long dwStatus; // EVENT_STATUS
-	unsigned long dwEventId;
-	unsigned long dwCardType; //WD_BUS_PCI, WD_BUS_USB, WD_BUS_PCMCIA
-	unsigned long hKernelPlugIn;
-	unsigned long dwOptions; // WD_EVENT_OPTION
+	uint32_t handle;
+	uint32_t dwAction; // WD_EVENT_ACTION
+	uint32_t dwStatus; // EVENT_STATUS
+	uint32_t dwEventId;
+	uint32_t dwCardType; //WD_BUS_PCI, WD_BUS_USB, WD_BUS_PCMCIA
+	uint32_t hKernelPlugIn;
+	uint32_t dwOptions; // WD_EVENT_OPTION
 	union
 	{
 		struct
@@ -131,55 +131,55 @@ struct event {
 		struct
 		{
 			WD_USB_ID deviceId;
-			unsigned long dwUniqueID;
+			uint32_t dwUniqueID;
 		} Usb;
 	} u;
-	unsigned long dwEventVer;
-	unsigned long dwNumMatchTables;
+	uint32_t dwEventVer;
+	uint32_t dwNumMatchTables;
 	WDU_MATCH_TABLE matchTables[1];
 };
 
 typedef struct
 {
-	unsigned long dwBusType;        // Bus Type: ISA, EISA, PCI, PCMCIA.
-	unsigned long dwBusNum;         // Bus number.
-	unsigned long dwSlotFunc;       // Slot number on Bus.
+	uint32_t dwBusType;        // Bus Type: ISA, EISA, PCI, PCMCIA.
+	uint32_t dwBusNum;         // Bus number.
+	uint32_t dwSlotFunc;       // Slot number on Bus.
 } WD_BUS, WD_BUS_V30;
 
 typedef struct
 {
-	unsigned long item; // ITEM_TYPE
-	unsigned long fNotSharable;
-	unsigned long dwReserved; // Reserved for internal use
-	unsigned long dwOptions; // WD_ITEM_OPTIONS
+	uint32_t item; // ITEM_TYPE
+	uint32_t fNotSharable;
+	uint32_t dwReserved; // Reserved for internal use
+	uint32_t dwOptions; // WD_ITEM_OPTIONS
 	union
 	{
 		struct
 		{ // ITEM_MEMORY
-			unsigned long dwPhysicalAddr;     // Physical address on card.
-			unsigned long dwBytes;            // Address range.
+			uint32_t dwPhysicalAddr;     // Physical address on card.
+			uint32_t dwBytes;            // Address range.
 			void* dwTransAddr;         // Returns the address to pass on to transfer commands.
 			void* dwUserDirectAddr;   // Returns the address for direct user read/write.
-			unsigned long dwCpuPhysicalAddr;  // Returns the CPU physical address
-			unsigned long dwBar;              // Base Address Register number of PCI card.
+			uint32_t dwCpuPhysicalAddr;  // Returns the CPU physical address
+			uint32_t dwBar;              // Base Address Register number of PCI card.
 		} Mem;
 		struct
 		{ // ITEM_IO
 			void* dwAddr;          // Beginning of io address.
-			unsigned long dwBytes;        // IO range.
-			unsigned long dwBar;          // Base Address Register number of PCI card.
+			uint32_t dwBytes;        // IO range.
+			uint32_t dwBar;          // Base Address Register number of PCI card.
 		} IO;
 		struct
 		{ // ITEM_INTERRUPT
-			unsigned long dwInterrupt; // Number of interrupt to install.
-			unsigned long dwOptions;   // Interrupt options. For level sensitive
+			uint32_t dwInterrupt; // Number of interrupt to install.
+			uint32_t dwOptions;   // Interrupt options. For level sensitive
 			// interrupts - set to: INTERRUPT_LEVEL_SENSITIVE.
-			unsigned long hInterrupt;  // Returns the handle of the interrupt installed.
+			uint32_t hInterrupt;  // Returns the handle of the interrupt installed.
 		} Int;
 		WD_BUS Bus; // ITEM_BUS
 		struct
 		{
-			unsigned long dw1, dw2, dw3, dw4; // Reserved for internal use
+			uint32_t dw1, dw2, dw3, dw4; // Reserved for internal use
 			void* dw5; // Reserved for internal use
 		} Val;
 	} I;
@@ -189,7 +189,7 @@ typedef struct
 
 typedef struct
 {
-	unsigned long dwItems;
+	uint32_t dwItems;
 	WD_ITEMS Item[WD_CARD_ITEMS];
 } WD_CARD, WD_CARD_V30;
 
@@ -198,9 +198,9 @@ enum { CARD_VX_NO_MMU_INIT = 0x4000000 };
 struct card_register
 {
 	WD_CARD Card;           // Card to register.
-	unsigned long fCheckLockOnly;   // Only check if card is lockable, return hCard=1 if OK.
-	unsigned long hCard;            // Handle of card.
-	unsigned long dwOptions;        // Should be zero.
+	uint32_t fCheckLockOnly;   // Only check if card is lockable, return hCard=1 if OK.
+	uint32_t hCard;            // Handle of card.
+	uint32_t dwOptions;        // Should be zero.
 	char cName[32];         // Name of card.
 	char cDescription[100]; // Description.
 };
@@ -208,120 +208,120 @@ struct card_register
 typedef struct
 {
 	void* dwPort;       // IO port for transfer or kernel memory address.
-	unsigned long cmdTrans;    // Transfer command WD_TRANSFER_CMD.
+	uint32_t cmdTrans;    // Transfer command WD_TRANSFER_CMD.
 
 	// Parameters used for string transfers:
-	unsigned long dwBytes;     // For string transfer.
-	unsigned long fAutoinc;    // Transfer from one port/address
+	uint32_t dwBytes;     // For string transfer.
+	uint32_t fAutoinc;    // Transfer from one port/address
 	// or use incremental range of addresses.
-	unsigned long dwOptions;   // Must be 0.
+	uint32_t dwOptions;   // Must be 0.
 	union
 	{
-		unsigned char Byte;     // Use for 8 bit transfer.
-		unsigned short Word;     // Use for 16 bit transfer.
-		unsigned int Dword;   // Use for 32 bit transfer.
-		unsigned long long Qword;  // Use for 64 bit transfer.
+		uint8_t Byte;     // Use for 8 bit transfer.
+		uint16_t Word;     // Use for 16 bit transfer.
+		uint32_t Dword;   // Use for 32 bit transfer.
+		uint64_t Qword;  // Use for 64 bit transfer.
 		void* pBuffer; // Use for string transfer.
 	} Data;
 } WD_TRANSFER, WD_TRANSFER_V61;
 
 typedef struct
 {
-	unsigned long hKernelPlugIn;
-	unsigned long dwMessage;
+	uint32_t hKernelPlugIn;
+	uint32_t dwMessage;
 	void* pData;
-	unsigned long dwResult;
+	uint32_t dwResult;
 } WD_KERNEL_PLUGIN_CALL, WD_KERNEL_PLUGIN_CALL_V40;
 
 
 struct interrupt
 {
-	unsigned long hInterrupt;    // Handle of interrupt.
-	unsigned long dwOptions;     // Interrupt options: can be INTERRUPT_CMD_COPY
+	uint32_t hInterrupt;    // Handle of interrupt.
+	uint32_t dwOptions;     // Interrupt options: can be INTERRUPT_CMD_COPY
 
 	WD_TRANSFER *Cmd;    // Commands to do on interrupt.
-	unsigned long dwCmds;        // Number of commands.
+	uint32_t dwCmds;        // Number of commands.
 
 	// For WD_IntEnable():
 	WD_KERNEL_PLUGIN_CALL kpCall; // Kernel PlugIn call.
-	unsigned long fEnableOk;     // TRUE if interrupt was enabled (WD_IntEnable() succeed).
+	uint32_t fEnableOk;     // TRUE if interrupt was enabled (WD_IntEnable() succeed).
 
 	// For WD_IntWait() and WD_IntCount():
-	unsigned long dwCounter;     // Number of interrupts received.
-	unsigned long dwLost;        // Number of interrupts not yet dealt with.
-	unsigned long fStopped;      // Was interrupt disabled during wait.
+	uint32_t dwCounter;     // Number of interrupts received.
+	uint32_t dwLost;        // Number of interrupts not yet dealt with.
+	uint32_t fStopped;      // Was interrupt disabled during wait.
 };
 
 struct usb_set_interface
 {
-	unsigned long dwUniqueID;
-	unsigned long dwInterfaceNum;
-	unsigned long dwAlternateSetting;
-	unsigned long dwOptions;
+	uint32_t dwUniqueID;
+	uint32_t dwInterfaceNum;
+	uint32_t dwAlternateSetting;
+	uint32_t dwOptions;
 };
 
 struct usb_get_device_data
 {
-	unsigned long dwUniqueID;
+	uint32_t dwUniqueID;
 	void* pBuf;
-	unsigned long dwBytes;
-	unsigned long dwOptions;
+	uint32_t dwBytes;
+	uint32_t dwOptions;
 };
 
 #define WD_USB_MAX_INTERFACES 30
 
 typedef struct
 {
-	unsigned char bLength;
-	unsigned char bDescriptorType;
-	unsigned char bInterfaceNumber;
-	unsigned char bAlternateSetting;
-	unsigned char bNumEndpoints;
-	unsigned char bInterfaceClass;
-	unsigned char bInterfaceSubClass;
-	unsigned char bInterfaceProtocol;
-	unsigned char iInterface;
+	uint8_t bLength;
+	uint8_t bDescriptorType;
+	uint8_t bInterfaceNumber;
+	uint8_t bAlternateSetting;
+	uint8_t bNumEndpoints;
+	uint8_t bInterfaceClass;
+	uint8_t bInterfaceSubClass;
+	uint8_t bInterfaceProtocol;
+	uint8_t iInterface;
 } WDU_INTERFACE_DESCRIPTOR;
 
 typedef struct
 {
-	unsigned char bLength;
-	unsigned char bDescriptorType;
-	unsigned char bEndpointAddress;
-	unsigned char bmAttributes;
-	unsigned short wMaxPacketSize;
-	unsigned char bInterval;
+	uint8_t bLength;
+	uint8_t bDescriptorType;
+	uint8_t bEndpointAddress;
+	uint8_t bmAttributes;
+	uint16_t wMaxPacketSize;
+	uint8_t bInterval;
 } WDU_ENDPOINT_DESCRIPTOR;
 
 typedef struct
 {
-	unsigned char bLength;
-	unsigned char bDescriptorType;
-	unsigned short wTotalLength;
-	unsigned char bNumInterfaces;
-	unsigned char bConfigurationValue;
-	unsigned char iConfiguration;
-	unsigned char bmAttributes;
-	unsigned char MaxPower;
+	uint8_t bLength;
+	uint8_t bDescriptorType;
+	uint16_t wTotalLength;
+	uint8_t bNumInterfaces;
+	uint8_t bConfigurationValue;
+	uint8_t iConfiguration;
+	uint8_t bmAttributes;
+	uint8_t MaxPower;
 } WDU_CONFIGURATION_DESCRIPTOR;
 
 typedef struct
 {
-	unsigned char bLength;
-	unsigned char bDescriptorType;
-	unsigned short bcdUSB;
-	unsigned char bDeviceClass;
-	unsigned char bDeviceSubClass;
-	unsigned char bDeviceProtocol;
-	unsigned char bMaxPacketSize0;
+	uint8_t bLength;
+	uint8_t bDescriptorType;
+	uint16_t bcdUSB;
+	uint8_t bDeviceClass;
+	uint8_t bDeviceSubClass;
+	uint8_t bDeviceProtocol;
+	uint8_t bMaxPacketSize0;
 
-	unsigned short idVendor;
-	unsigned short idProduct;
-	unsigned short bcdDevice;
-	unsigned char iManufacturer;
-	unsigned char iProduct;
-	unsigned char iSerialNumber;
-	unsigned char bNumConfigurations;
+	uint16_t idVendor;
+	uint16_t idProduct;
+	uint16_t bcdDevice;
+	uint8_t iManufacturer;
+	uint8_t iProduct;
+	uint8_t iSerialNumber;
+	uint8_t bNumConfigurations;
 } WDU_DEVICE_DESCRIPTOR;
 
 typedef struct
@@ -334,14 +334,14 @@ typedef struct
 typedef struct
 {
 	WDU_ALTERNATE_SETTING *pAlternateSettings;
-	unsigned long dwNumAltSettings;
+	uint32_t dwNumAltSettings;
 	WDU_ALTERNATE_SETTING *pActiveAltSetting;
 } WDU_INTERFACE;
 
 typedef struct
 {
 	WDU_CONFIGURATION_DESCRIPTOR Descriptor;
-	unsigned long dwNumInterfaces;
+	uint32_t dwNumInterfaces;
 	WDU_INTERFACE *pInterfaces;
 } WDU_CONFIGURATION;
 
