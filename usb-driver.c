@@ -47,6 +47,7 @@ static int modules_read = 0;
 static struct usb_bus *busses = NULL;
 static struct usb_device *usbdevice;
 static usb_dev_handle *usb_devhandle = NULL;
+static int usbinterface = -1;
 static unsigned long card_type;
 static int ints_enabled = 0;
 static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
@@ -382,6 +383,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					ret = usb_claim_interface(usb_devhandle, usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber);
 					if (!ret) {
 						if(!ret) {
+							usbinterface = usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber;
 							ret = usb_set_altinterface(usb_devhandle, usi->dwAlternateSetting);
 							if (ret)
 								fprintf(stderr, "usb_set_altinterface: %d\n", ret);
@@ -712,6 +714,14 @@ int close(int fd) {
 	
 	if (fd == windrvrfd && windrvrfd >= 0) {
 		DPRINTF("close windrvrfd\n");
+		if (usbinterface >= 0)
+			usb_release_interface(usb_devhandle, usbinterface);
+
+		if (usb_devhandle)
+			usb_close(usb_devhandle);
+
+		usb_devhandle = NULL;
+		usbinterface = -1;
 		windrvrfd = -1;
 	}
 
