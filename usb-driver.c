@@ -53,6 +53,7 @@ static int ints_enabled = 0;
 static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
 
 #define NO_WINDRVR 1
+#undef PARPORT
 
 #ifdef DEBUG
 #define DPRINTF(format, args...) fprintf(stderr, format, ##args)
@@ -230,6 +231,33 @@ int usb_deviceinfo(unsigned char *buf) {
 	return len;
 }
 
+int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wdioctl) {
+	int ret = 0;
+
+	DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
+			(unsigned long)tr->dwPort, tr->cmdTrans, tr->dwBytes,
+			tr->fAutoinc, tr->dwOptions);
+	
+#ifdef DEBUG
+	if (tr->cmdTrans == 13)
+		DPRINTF("write byte: %d\n", tr->Data.Byte);
+#endif
+
+#ifndef NO_WINDRVR
+	ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
+
+	DPRINTF("dwPortReturn: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
+			(unsigned long)tr->dwPort, tr->cmdTrans, tr->dwBytes,
+			tr->fAutoinc, tr->dwOptions);
+#ifdef DEBUG
+	if (tr->cmdTrans == 10)
+		DPRINTF("read byte: %d\n", tr->Data.Byte);
+#endif
+
+	return ret;
+}
+
 int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	struct header_struct* wdheader = (struct header_struct*)wdioctl;
 	struct version_struct *version;
@@ -255,12 +283,16 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 		case CARD_REGISTER_OLD:
 		case CARD_REGISTER:
 			/* TODO: Implement for LPT-support */
-#if 0
+#ifdef PARPORT
 			{
 				struct card_register* cr = (struct card_register*)(wdheader->data);
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+				/* TODO: Open /dev/parport, check, ... */
+				cr->hCard = 1;
 #endif
+				DPRINTF("hCard: %lu\n", cr->hCard);
 			}
 #endif
 			DPRINTF("CARD_REGISTER\n");
@@ -526,16 +558,37 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 		case TRANSFER_OLD:
 		case TRANSFER:
 			DPRINTF("TRANSFER\n");
-#ifndef NO_WINDRVR
-			ret = (*ioctl_func) (fd, request, wdioctl);
-#endif
+			{
+				WD_TRANSFER *tr = (WD_TRANSFER*)(wdheader->data);
+
+				ret = pp_transfer(tr, fd, request, wdioctl);
+			}
 			break;
 
 		case MULTI_TRANSFER:
 			DPRINTF("MULTI_TRANSFER\n");
+			{
+				WD_TRANSFER *tr = (WD_TRANSFER*)(wdheader->data);
+				unsigned long num = wdheader->size/sizeof(WD_TRANSFER);
+				int i;
+
+
+				for (i = 0; i < num; i++) {
+					DPRINTF("Transfer %d:\n", i+1);
 #ifndef NO_WINDRVR
-			ret = (*ioctl_func) (fd, request, wdioctl);
+					wdheader->size = sizeof(WD_TRANSFER);
+					request = TRANSFER;
+					wdheader->data = tr + i;
 #endif
+					ret = pp_transfer(tr + i, fd, request, wdioctl);
+				}
+
+#ifndef NO_WINDRVR
+				wdheader->data = tr;
+#endif
+
+				return ret;
+			}
 			break;
 
 		case EVENT_UNREGISTER:
