@@ -240,7 +240,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 		return (*ioctl_func) (fd, request, wdioctl);
 	}
 
-	switch(request) {
+	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
 			strcpy(version->version, "WinDriver no more");
