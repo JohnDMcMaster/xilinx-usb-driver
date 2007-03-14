@@ -258,6 +258,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #if 0
 			{
 				struct card_register* cr = (struct card_register*)(wdheader->data);
+#ifndef NO_WINDRVR
+				ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
 			}
 #endif
 			DPRINTF("CARD_REGISTER\n");
@@ -523,6 +526,13 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 		case TRANSFER_OLD:
 		case TRANSFER:
 			DPRINTF("TRANSFER\n");
+#ifndef NO_WINDRVR
+			ret = (*ioctl_func) (fd, request, wdioctl);
+#endif
+			break;
+
+		case MULTI_TRANSFER:
+			DPRINTF("MULTI_TRANSFER\n");
 #ifndef NO_WINDRVR
 			ret = (*ioctl_func) (fd, request, wdioctl);
 #endif

@@ -1,6 +1,7 @@
 #define VERSION			0x910
 #define LICENSE			0x952
 #define TRANSFER		0x98c
+#define MULTI_TRANSFER		0x98d
 #define USB_TRANSFER		0x983
 #define EVENT_UNREGISTER	0x987
 #define INT_DISABLE		0x91f
