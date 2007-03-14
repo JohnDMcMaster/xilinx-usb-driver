@@ -349,6 +349,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					DPRINTF("opening %s\n", ppdev);
 					parportfd = open(ppdev, O_RDWR|O_EXCL);
 					parportnum++;
+
+					if (parportfd < 0)
+						fprintf(stderr,"Can't open %s: %s\n", ppdev, strerror(errno));
 				}
 
 				if (parportfd >= 0) {
