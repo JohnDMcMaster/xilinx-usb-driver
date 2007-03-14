@@ -1,4 +1,4 @@
-/* libusb connector for XILINX impact
+/* libusb/ppdev connector for XILINX impact
  *
  * Copyright (c) 2007 Michael Gernoth <michael@gernoth.net>
  *
@@ -38,10 +38,17 @@
 #include <pthread.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <sys/ioctl.h>
+#include <linux/parport.h>
+#include <linux/ppdev.h>
 #include "usb-driver.h"
 
 static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = -1;
+static int parportfd = -1;
+static int parportnum = 0;
+static unsigned long ppbase = 0;
+static unsigned long ecpbase = 0;
 FILE *modulesfp = NULL;
 static int modules_read = 0;
 static struct usb_bus *busses = NULL;
@@ -53,7 +60,6 @@ static int ints_enabled = 0;
 static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
 
 #define NO_WINDRVR 1
-#undef PARPORT
 
 #ifdef DEBUG
 #define DPRINTF(format, args...) fprintf(stderr, format, ##args)
@@ -233,18 +239,55 @@ int usb_deviceinfo(unsigned char *buf) {
 
 int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wdioctl) {
 	int ret = 0;
+	unsigned char val;
 
 	DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
 			(unsigned long)tr->dwPort, tr->cmdTrans, tr->dwBytes,
 			tr->fAutoinc, tr->dwOptions);
+
+	val = tr->Data.Byte;
 	
 #ifdef DEBUG
 	if (tr->cmdTrans == 13)
-		DPRINTF("write byte: %d\n", tr->Data.Byte);
+		DPRINTF("write byte: %d\n", val);
 #endif
 
 #ifndef NO_WINDRVR
 	ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+	if (parportfd < 0)
+		return ret;
+
+	switch(tr->cmdTrans) {
+		case 10: /* Read Byte */
+			if ((unsigned long)tr->dwPort == ppbase) { /* Data Port */
+				ret = 0; /* We don't support reading of the data port */
+			} else if ((unsigned long)tr->dwPort == ppbase + 1) { /* Status Port */
+				DPRINTF("status port\n");
+				ret = ioctl(parportfd, PPRSTATUS, &val);
+			} else if ((unsigned long)tr->dwPort == ppbase + 2) { /* Control Port */
+				DPRINTF("control port\n");
+				ret = ioctl(parportfd, PPRCONTROL, &val);
+			}
+			break;
+		case 13: /* Write Byte */
+			if ((unsigned long)tr->dwPort == ppbase) { /* Data Port */
+				DPRINTF("data port\n");
+				ret = ioctl(parportfd, PPWDATA, &val);
+			} else if ((unsigned long)tr->dwPort == ppbase + 1) { /* Status Port */
+				ret = 0; /* Status Port is readonly */
+			} else if ((unsigned long)tr->dwPort == ppbase + 2) { /* Control Port */
+				DPRINTF("control port\n");
+				ret = ioctl(parportfd, PPWCONTROL, &val);
+			}
+			break;
+		default:
+			fprintf(stderr,"!!!Unsupported TRANSFER command: %lu!!!\n", tr->cmdTrans);
+			ret = -1;
+			break;
+	}
+
+	tr->Data.Byte = val;
 #endif
 
 	DPRINTF("dwPortReturn: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
@@ -282,20 +325,62 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 		case CARD_REGISTER_OLD:
 		case CARD_REGISTER:
-			/* TODO: Implement for LPT-support */
-#ifdef PARPORT
+			DPRINTF("CARD_REGISTER\n");
 			{
 				struct card_register* cr = (struct card_register*)(wdheader->data);
+				char ppdev[32];
+
+				DPRINTF("Items: %lu, Addr: 0x%lx, bytes: %lu, bar: %lu\n",
+				cr->Card.dwItems,
+				(unsigned long)cr->Card.Item[0].I.IO.dwAddr,
+				cr->Card.Item[0].I.IO.dwBytes,
+				cr->Card.Item[0].I.IO.dwBar);
+				
+				DPRINTF("Items: %lu, Addr: 0x%lx, bytes: %lu, bar: %lu\n",
+				cr->Card.dwItems,
+				(unsigned long)cr->Card.Item[1].I.IO.dwAddr,
+				cr->Card.Item[1].I.IO.dwBytes,
+				cr->Card.Item[1].I.IO.dwBar);
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				/* TODO: Open /dev/parport, check, ... */
-				cr->hCard = 1;
+				if (parportfd < 0) {
+					snprintf(ppdev, sizeof(ppdev), "/dev/parport%d", parportnum);
+					DPRINTF("opening %s\n", ppdev);
+					parportfd = open(ppdev, O_RDWR|O_EXCL);
+					parportnum++;
+				}
+
+				if (parportfd >= 0) {
+					int pmode;
+
+					if (ioctl(parportfd, PPCLAIM) == -1)
+						return ret;
+
+					pmode = IEEE1284_MODE_COMPAT;
+					if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
+						return ret;
+					
+					if (cr->Card.dwItems > 1) {
+						ecpbase = cr->Card.Item[1].I.IO.dwBytes;
+						/* TODO: Implement ECP mode */
+#if 0
+						pmode = IEEE1284_MODE_ECP;
+
+						if (ioctl(parportfd, PPNEGOT, &pmode) == -1) {
+							pmode = IEEE1284_MODE_COMPAT;
+							if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
+								return ret;
+						}
+#endif
+					}
+
+					cr->hCard = parportfd;
+					ppbase = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;
+				}
 #endif
 				DPRINTF("hCard: %lu\n", cr->hCard);
 			}
-#endif
-			DPRINTF("CARD_REGISTER\n");
 			break;
 
 		case USB_TRANSFER:
@@ -565,6 +650,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			}
 			break;
 
+		case MULTI_TRANSFER_OLD:
 		case MULTI_TRANSFER:
 			DPRINTF("MULTI_TRANSFER\n");
 			{
@@ -633,9 +719,27 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 		case CARD_UNREGISTER:
 			DPRINTF("CARD_UNREGISTER\n");
+			{
+				struct card_register* cr = (struct card_register*)(wdheader->data);
+
+				DPRINTF("Addr: 0x%lx, bytes: %lu, bar: %lu\n",
+				(unsigned long)cr->Card.Item[0].I.IO.dwAddr,
+				cr->Card.Item[0].I.IO.dwBytes,
+				cr->Card.Item[0].I.IO.dwBar);
+
+				DPRINTF("hCard: %lu\n", cr->hCard);
+
 #ifndef NO_WINDRVR
-			ret = (*ioctl_func) (fd, request, wdioctl);
+				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+				if (parportfd == cr->hCard && parportfd >= 0) {
+					ioctl(parportfd, PPRELEASE);
+					close(parportfd);
+					parportfd = -1;
+					parportnum--;
+				}
 #endif
+			}
 			break;
 
 		case EVENT_PULL:
@@ -718,7 +822,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	return ret;
 }
 
-int ioctl(int fd, int request, ...) {
+int ioctl(int fd, unsigned long int request, ...) {
 	va_list args;
 	void *argp;
 	int ret;
@@ -826,7 +930,7 @@ char *fgets(char *s, int size, FILE *stream) {
 		func = (char* (*) (char*, int, FILE*)) dlsym(RTLD_NEXT, "fgets");
 	
 	if (modulesfp == stream) {
-		if (modules_read < sizeof(modules)) {
+		if (modules_read < sizeof(modules) / sizeof(modules[0])) {
 			strcpy(s, modules[modules_read]);
 			ret = s;
 			modules_read++;

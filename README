@@ -1,10 +1,13 @@
-This library emulates Jungo Windrvr USB functions in userspace which are
-required by XILINX impact to access the Platform cable USB. With this library
-it is possible to access the cable without loading a proprietary kernel module
-which breaks with every new kernel release. It uses the USB functions provided
-by the libusb userspace library instead and should work on every kernel version
-which is supported by libusb. It was written against impact from ISE Webpack
-9.1SP1 and tested with the following software:
+This library emulates Jungo Windrvr USB and parallel port functions in
+userspace which are required by XILINX impact to access the Platform cable USB
+and Parallel Cable III.
+With this library it is possible to access the cables without loading a
+proprietary kernel module which breaks with every new kernel release. It uses
+the functions provided by the libusb userspace library for USB access and
+the kernel interface at /dev/parport0 for parallel port access instead and
+should work on every kernel version which is supported by libusb and supports
+ppdev. It was written against impact from ISE Webpack 9.1SP1 and tested with
+the following software:
 
  * ISE Webpack 9.1SP2
  * ISE Webpack 9.1SP1
@@ -21,7 +24,11 @@ $ export LD_PRELOAD=/path/to/libusb-driver.so  (for sh shells)
 $ setenv LD_PRELOAD /path/to/libusb-driver.so  (for csh shells)
 $ impact
 
-To use the device as ordinary user, put the following line in a new
+
+Notes for the USB cable
+=======================
+
+To use the device as an ordinary user, put the following line in a new
 file in /etc/udev/rules.d/ and restart udev:
 ACTION=="add", BUS=="usb", SYSFS{idVendor}=="03fd", MODE="666"
 
@@ -40,3 +47,20 @@ these steps:
 3. copy the file /path/to/ISE/bin/lin/xusbdfwu.hex to /usr/share/xusbdfwu.hex
 
 4. restart udev and re-plug the cable
+
+
+Notes for the parallel cable
+============================
+
+To access the parallel port from userspace, the kernel needs to be built with
+the features "Parallel port support" (CONFIG_PARPORT), "PC-style hardware"
+(CONFIG_PARPORT_PC) and "Support for user-space parallel port device drivers"
+(CONFIG_PPDEV) builtin or as modules. If these features are built as modules,
+they need to be loaded before using this library.
+These modules are called:
+parport
+parport_pc
+ppdev
+
+
+To use the device as an ordinary user, put the user in the group 'lp'
