@@ -364,7 +364,8 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
 						return ret;
 					
-					if (cr->Card.dwItems > 1) {
+					if (cr->Card.dwItems > 1 && cr->Card.Item[1].I.IO.dwBytes) {
+						DPRINTF("ECP mode requested\n");
 						ecpbase = cr->Card.Item[1].I.IO.dwBytes;
 						/* TODO: Implement ECP mode */
 #if 0
