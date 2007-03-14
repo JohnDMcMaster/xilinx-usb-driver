@@ -252,6 +252,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			DPRINTF("LICENSE\n");
 			break;
 
+		case CARD_REGISTER_OLD:
 		case CARD_REGISTER:
 			/* TODO: Implement for LPT-support */
 #if 0
@@ -321,6 +322,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			}
 			break;
 
+		case INT_ENABLE_OLD:
 		case INT_ENABLE:
 			DPRINTF("INT_ENABLE\n");
 			{
@@ -403,6 +405,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			}
 			break;
 
+		case USB_GET_DEVICE_DATA_OLD:
 		case USB_GET_DEVICE_DATA:
 			DPRINTF("USB_GET_DEVICE_DATA\n");
 			{
@@ -424,6 +427,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			}
 			break;
 
+		case EVENT_REGISTER_OLD:
 		case EVENT_REGISTER:
 			DPRINTF("EVENT_REGISTER\n");
 			{
@@ -516,6 +520,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			}
 			break;
 
+		case TRANSFER_OLD:
 		case TRANSFER:
 			DPRINTF("TRANSFER\n");
 #ifndef NO_WINDRVR
