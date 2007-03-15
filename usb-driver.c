@@ -360,6 +360,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					if (ioctl(parportfd, PPCLAIM) == -1)
 						return ret;
 
+					ecpbase = 0;
 					pmode = IEEE1284_MODE_COMPAT;
 					if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
 						return ret;
@@ -372,6 +373,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 						pmode = IEEE1284_MODE_ECP;
 
 						if (ioctl(parportfd, PPNEGOT, &pmode) == -1) {
+							ecpbase = 0;
 							pmode = IEEE1284_MODE_COMPAT;
 							if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
 								return ret;
