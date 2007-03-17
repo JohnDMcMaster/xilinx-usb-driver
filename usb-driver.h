@@ -25,6 +25,9 @@
 #define PP_DATA			0
 #define PP_STATUS		1
 #define PP_CONTROL		2
+#define PP_ECP_CFGA		0
+#define PP_ECP_CFGB		1
+#define PP_ECP_ECR		2
 #define PP_READ			10
 #define PP_WRITE		13
 

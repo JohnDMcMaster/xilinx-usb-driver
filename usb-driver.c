@@ -307,8 +307,14 @@ int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wd
 				ret = -1;
 				break;
 		}
+	} else if ((port == ecpbase + PP_ECP_CFGA) && ecpbase) {
+		DPRINTF("ECP_CFGA port\n");
+	} else if ((port == ecpbase + PP_ECP_CFGB) && ecpbase) {
+		DPRINTF("ECP_CFGB port\n");
+	} else if ((port == ecpbase + PP_ECP_ECR) && ecpbase) {
+		DPRINTF("ECP_ECR port\n");
 	} else {
-		DPRINTF("access to unsupported address range (probably ECP)!\n");
+		DPRINTF("access to unsupported address range!\n");
 		ret = 0;
 	}
 
@@ -390,9 +396,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
 						return ret;
 					
-					if (cr->Card.dwItems > 1 && cr->Card.Item[1].I.IO.dwBytes) {
+					if (cr->Card.dwItems > 1 && cr->Card.Item[1].I.IO.dwAddr) {
 						DPRINTF("ECP mode requested\n");
-						ecpbase = cr->Card.Item[1].I.IO.dwBytes;
+						ecpbase = (unsigned long)cr->Card.Item[1].I.IO.dwAddr;
 						/* TODO: Implement ECP mode */
 #if 0
 						pmode = IEEE1284_MODE_ECP;
