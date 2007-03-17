@@ -3,7 +3,7 @@ userspace which are required by XILINX impact to access the Platform cable USB
 and Parallel Cable III.
 With this library it is possible to access the cables without loading a
 proprietary kernel module which breaks with every new kernel release. It uses
-the functions provided by the libusb userspace library for USB access and
+the functionality provided by the libusb userspace library for USB access and
 the kernel interface at /dev/parport0 for parallel port access instead and
 should work on every kernel version which is supported by libusb and supports
 ppdev. It was written against impact from ISE Webpack 9.1SP1 and tested with
@@ -66,3 +66,7 @@ ppdev
 
 
 To use the device as an ordinary user, put the user in the group 'lp'
+
+
+Parallel Cable IV is currently only supported in 'compatibility mode', as no
+attempt to configure the ECP registers is done by this library.
