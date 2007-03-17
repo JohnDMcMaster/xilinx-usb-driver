@@ -22,6 +22,12 @@
 
 #define MAGIC 0xa410b413UL
 
+#define PP_DATA			0
+#define PP_STATUS		1
+#define PP_CONTROL		2
+#define PP_READ			10
+#define PP_WRITE		13
+
 #define WDU_GET_MAX_PACKET_SIZE(x)                ((unsigned short) (((x) & 0x7ff) * (1 + (((x) & 0x1800) >> 11))))
 
 /* http://www.jungo.com/support/documentation/windriver/811/wdusb_man_mhtml/node78.html#SECTION001734000000000000000 */

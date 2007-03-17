@@ -258,33 +258,65 @@ int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wd
 	if (parportfd < 0)
 		return ret;
 
-	switch(tr->cmdTrans) {
-		case 10: /* Read Byte */
-			if ((unsigned long)tr->dwPort == ppbase) { /* Data Port */
-				ret = 0; /* We don't support reading of the data port */
-			} else if ((unsigned long)tr->dwPort == ppbase + 1) { /* Status Port */
-				DPRINTF("status port\n");
-				ret = ioctl(parportfd, PPRSTATUS, &val);
-			} else if ((unsigned long)tr->dwPort == ppbase + 2) { /* Control Port */
-				DPRINTF("control port\n");
-				ret = ioctl(parportfd, PPRCONTROL, &val);
+	switch((unsigned long)tr->dwPort - ppbase) {
+		case PP_DATA:
+			DPRINTF("data port\n");
+			switch(tr->cmdTrans) {
+				case PP_READ:
+					ret = 0; /* We don't support reading of the data port */
+					break;
+
+				case PP_WRITE:
+					ret = ioctl(parportfd, PPWDATA, &val);
+					break;
+
+				default:
+					fprintf(stderr,"!!!Unsupported TRANSFER command: %lu!!!\n", tr->cmdTrans);
+					ret = -1;
+					break;
 			}
-			break;
-		case 13: /* Write Byte */
-			if ((unsigned long)tr->dwPort == ppbase) { /* Data Port */
-				DPRINTF("data port\n");
-				ret = ioctl(parportfd, PPWDATA, &val);
-			} else if ((unsigned long)tr->dwPort == ppbase + 1) { /* Status Port */
-				ret = 0; /* Status Port is readonly */
-			} else if ((unsigned long)tr->dwPort == ppbase + 2) { /* Control Port */
-				DPRINTF("control port\n");
-				ret = ioctl(parportfd, PPWCONTROL, &val);
+		break;
+
+		case PP_STATUS:
+			DPRINTF("status port\n");
+			switch(tr->cmdTrans) {
+				case PP_READ:
+					ret = ioctl(parportfd, PPRSTATUS, &val);
+					break;
+
+				case PP_WRITE:
+					ret = 0; /* Status Port is readonly */
+					break;
+
+				default:
+					fprintf(stderr,"!!!Unsupported TRANSFER command: %lu!!!\n", tr->cmdTrans);
+					ret = -1;
+					break;
 			}
-			break;
+		break;
+
+		case PP_CONTROL:
+			DPRINTF("control port\n");
+			switch(tr->cmdTrans) {
+				case PP_READ:
+					ret = ioctl(parportfd, PPRCONTROL, &val);
+					break;
+
+				case PP_WRITE:
+					ret = ioctl(parportfd, PPWCONTROL, &val);
+					break;
+
+				default:
+					fprintf(stderr,"!!!Unsupported TRANSFER command: %lu!!!\n", tr->cmdTrans);
+					ret = -1;
+					break;
+			}
+		break;
+
 		default:
-			fprintf(stderr,"!!!Unsupported TRANSFER command: %lu!!!\n", tr->cmdTrans);
-			ret = -1;
-			break;
+			DPRINTF("access to unsupported address range (probably ECP)!\n");
+			ret = 0;
+		break;
 	}
 
 	tr->Data.Byte = val;
