@@ -70,3 +70,14 @@ To use the device as an ordinary user, put the user in the group 'lp'
 
 Parallel Cable IV is currently only supported in 'compatibility mode', as no
 attempt to configure the ECP registers is done by this library.
+
+
+If you get "Programming failed" or "DONE did not go high" when programming
+through the parallel cable with Impact 9.1, make sure to have the option "Use
+HIGHZ instead of BYPASS" enabled in Edit -> Preferences -> iMPACT Configuration
+Preferences.
+If you are using batch mode, add the following line to your cmd file:
+setPreference -pref UseHighz:TRUE
+(This problem also occurs on windows and when using the real windrvr in linux and
+is solved with the same workaround. Impact 8.2 is working fine with the same
+boards and designs)
