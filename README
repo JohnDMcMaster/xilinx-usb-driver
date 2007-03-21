@@ -26,6 +26,9 @@ $ export LD_PRELOAD=/path/to/libusb-driver.so  (for sh shells)
 $ setenv LD_PRELOAD /path/to/libusb-driver.so  (for csh shells)
 $ impact
 
+The source for this library can be found at:
+http://cvs.zerfleddert.de/cgi-bin/viewcvs.cgi/usb-driver/
+
 
 Notes for the USB cable
 =======================
