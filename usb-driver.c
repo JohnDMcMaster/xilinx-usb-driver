@@ -46,9 +46,9 @@
 static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = -1;
 static int parportfd = -1;
-static int parportnum = 0;
 static unsigned long ppbase = 0;
 static unsigned long ecpbase = 0;
+static struct pports *pplist = NULL;
 FILE *modulesfp = NULL;
 static int modules_read = 0;
 static struct usb_bus *busses = NULL;
@@ -376,10 +376,36 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
 				if (parportfd < 0) {
-					if (ppbase && ((unsigned long)cr->Card.Item[0].I.IO.dwAddr != ppbase))
-						parportnum++;
+					int max = -1;
+					struct pports **port = &pplist;
 
-					snprintf(ppdev, sizeof(ppdev), "/dev/parport%d", parportnum);
+					while (*port) {
+						DPRINTF("Looking up parallel port in linked list, entry: %d\n", (*port)->num);
+						if (max < (*port)->num)
+							max = (*port)->num;
+
+						if ((*port)->base == (unsigned long)cr->Card.Item[0].I.IO.dwAddr) {
+							break;
+						}
+
+						port = &((*port)->next);
+					}
+
+					if (!(*port)) { /* not found */
+						(*port) = malloc(sizeof(struct pports));
+						if (!(*port)) {
+							perror("malloc");
+							exit(EXIT_FAILURE);
+						}
+
+						(*port)->base = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;
+						(*port)->num = max+1;
+						(*port)->next = NULL;
+
+						DPRINTF("parallel port not in linked list, new entry: %d\n", (*port)->num);
+					}
+
+					snprintf(ppdev, sizeof(ppdev), "/dev/parport%d", (*port)->num);
 					DPRINTF("opening %s\n", ppdev);
 					parportfd = open(ppdev, O_RDWR|O_EXCL);
 
