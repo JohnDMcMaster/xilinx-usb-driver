@@ -376,10 +376,12 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
 				if (parportfd < 0) {
+					if (ppbase && ((unsigned long)cr->Card.Item[0].I.IO.dwAddr != ppbase))
+						parportnum++;
+
 					snprintf(ppdev, sizeof(ppdev), "/dev/parport%d", parportnum);
 					DPRINTF("opening %s\n", ppdev);
 					parportfd = open(ppdev, O_RDWR|O_EXCL);
-					parportnum++;
 
 					if (parportfd < 0)
 						fprintf(stderr,"Can't open %s: %s\n", ppdev, strerror(errno));
@@ -773,7 +775,6 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					ioctl(parportfd, PPRELEASE);
 					close(parportfd);
 					parportfd = -1;
-					parportnum--;
 				}
 #endif
 			}
