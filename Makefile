@@ -1,16 +1,15 @@
-CFLAGS=-Wall -fPIC
+#Add -DFORCE_PC3_IDENT to CFLAGS to force the identification of
+#a Parallel Cable III
+CFLAGS=-Wall -fPIC #-DFORCE_PC3_IDENT
 
-SOBJECTS=libusb-driver.so libusb-driver-DEBUG.so libusb-driver-trenz.so
+SOBJECTS=libusb-driver.so libusb-driver-DEBUG.so
 
 all: $(SOBJECTS)
 
-libusb-driver.so: usb-driver.c usb-driver.h
+libusb-driver.so: usb-driver.c usb-driver.h Makefile
 	gcc $(CFLAGS) $< -o $@ -ldl -lusb -lpthread -shared
 
-libusb-driver-trenz.so: usb-driver.c usb-driver.h
-	gcc -DTRENZ $(CFLAGS) $< -o $@ -ldl -lusb -lpthread -shared
-
-libusb-driver-DEBUG.so: usb-driver.c usb-driver.h
+libusb-driver-DEBUG.so: usb-driver.c usb-driver.h Makefile
 	gcc -DDEBUG $(CFLAGS) $< -o $@ -ldl -lusb -lpthread -shared
 
 clean:

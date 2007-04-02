@@ -282,7 +282,7 @@ int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wd
 		switch(tr->cmdTrans) {
 			case PP_READ:
 				ret = ioctl(parportfd, PPRSTATUS, &val);
-#ifdef TRENZ
+#ifdef FORCE_PC3_IDENT
 				val &= 95;
 				if (last_pp_write & 64)
 					val |= 32;
