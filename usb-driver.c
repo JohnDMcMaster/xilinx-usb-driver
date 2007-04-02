@@ -241,6 +241,7 @@ int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wd
 	int ret = 0;
 	unsigned long port = (unsigned long)tr->dwPort;
 	unsigned char val;
+	static int last_pp_write = 0;
 
 	DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
 			(unsigned long)tr->dwPort, tr->cmdTrans, tr->dwBytes,
@@ -268,6 +269,7 @@ int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wd
 
 			case PP_WRITE:
 				ret = ioctl(parportfd, PPWDATA, &val);
+				last_pp_write = val;
 				break;
 
 			default:
@@ -276,10 +278,17 @@ int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wd
 				break;
 		}
 	} else if (port == ppbase + PP_STATUS) {
-		DPRINTF("status port\n");
+		DPRINTF("status port (last write: %d)\n", last_pp_write);
 		switch(tr->cmdTrans) {
 			case PP_READ:
 				ret = ioctl(parportfd, PPRSTATUS, &val);
+#ifdef TRENZ
+				val &= 95;
+				if (last_pp_write & 64)
+					val |= 32;
+				else
+					val |= 128;
+#endif
 				break;
 
 			case PP_WRITE:

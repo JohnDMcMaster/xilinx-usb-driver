@@ -72,6 +72,11 @@ ppdev
 To use the device as an ordinary user, put the user in the group 'lp'
 
 
+If you have an almost compatible cable which works with other software but not
+with Impact, try preloading libusb-driver-trenz.so instead of libusb-driver.so.
+It includes a hack by Stefan Ziegenbalg to force detection of a parallel cable.
+
+
 Parallel Cable IV is currently only supported in 'compatibility mode', as no
 attempt to configure the ECP registers is done by this library.
 
