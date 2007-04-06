@@ -14,7 +14,9 @@ the following software:
  * ISE Webpack 9.1SP1
  * ISE Webpack 8.2SP3
  * ISE Webpack 8.1SP3
+ * ChipScope 9.1.03i
  * ChipScope 9.1.02i
+ * ChipScope 8.2.04i
  * EDK 8.2.02i
 
 Build the library by calling `make'.

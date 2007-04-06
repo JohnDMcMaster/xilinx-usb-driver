@@ -354,7 +354,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
-			strcpy(version->version, "WinDriver no more");
+			strcpy(version->version, "libusb-driver.so $Revision: 1.59 $");
 			version->versionul = 802;
 			DPRINTF("VERSION\n");
 			break;
