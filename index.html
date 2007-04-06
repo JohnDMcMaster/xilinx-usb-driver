@@ -1,0 +1,61 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+	<HEAD>
+		<TITLE>XILINX USB/Parallel JTAG cables on Linux without windrvr</TITLE>
+	</HEAD>
+	<BODY BGCOLOR="#FFFFFF" TEXT="#000000">
+		<H1>XILINX JTAG tools on Linux without proprietary kernel modules</H1>
+		<H2>About</H2>
+		<P>
+		When using <a href="http://www.xilinx.com">XILINX</a> JTAG software like Impact, Chipscope and XMD
+		on Linux, the proprietary kernel <i>windrvr</i> module from <a href="http://www.jungo.com">Jungo</a>
+		is needed to access the parallel- or usb-cable.
+		As this module does not work with current linux kernel versions (&gt; 2.6.18) a library was developed,
+		which emulates the module in userspace and allows the tools to access the JTAG cable without the need
+		for a proprietary kernel module.
+		</P>
+		<P>
+		The library uses <a href="http://libusb.sourceforge.net/">libusb</a> to access USB devices and the
+		<a href="http://www.linuxfocus.org/common/src/article205/ppdev.html">ppdev</a> interface to communicate
+		with parallel cables. The parallel part currently only supports Parallel Cable III mode (and PCIV in
+		PCIII compatibility mode) as the faster PCIV modes use another kernel module which is not emulated by
+		this library. So you are limited to a 200kHz JTAG clock when using Parallel Cable IV with this software.
+		The USB cable is supported at full speed.
+		</P>
+		<P>
+		The library is called <i>libusb-driver</i> as it was developed to support the USB cable, but later
+		extended to also support parallel cables.
+		</P>
+		<H2>Supported Cables</H2>
+		The following cables are reported to work with this driver:
+		<ul>
+			<li><a href="http://direct.xilinx.com/bvdocs/publications/ds300.pdf">XILINX Platform Cable USB DLC9LP</a></li>
+			<li><a href="http://www.xilinx.com/s3estarter">Integrated Platform Cable USB on Spartan 3E starter kit</a></li>
+			<li><a href="http://direct.xilinx.com/bvdocs/publications/ds097.pdf">Parallel Cable IV</a> (in Parallel Cable III compatibility mode)</li>
+			<li><a href="http://www.enterpoint.co.uk/">Enterpoint Prog2</a> Parallel Cable III clone</li>
+			<li><a href="http://www.trenz-electronic.de/">Trenz TE0149-01</a> Parallel Cable III clone</li>
+			<li><a href="http://www.digilentinc.com/Products/Catalog.cfm?Nav1=Products&Nav2=Cables&Cat=Cable">Digilent JTAG3</a> Parallel Cable III clone</li>
+		</ul>
+		<H2>Supported Software</H2>
+		The following software is reported to work with this driver:
+		<ul>
+			<li><a href="http://www.xilinx.com/ise/logic_design_prod/webpack.htm">ISE Webpack 9.1SP3</a></li>
+			<li><a href="http://www.xilinx.com/ise/logic_design_prod/webpack.htm">ISE Webpack 9.1SP2</a></li>
+			<li><a href="http://www.xilinx.com/ise/logic_design_prod/webpack.htm">ISE Webpack 9.1SP1</a></li>
+			<li><a href="http://www.xilinx.com/ise/logic_design_prod/webpack.htm">ISE Webpack 8.2SP3</a></li>
+			<li><a href="http://www.xilinx.com/ise/logic_design_prod/webpack.htm">ISE Webpack 8.1SP3</a></li>
+			<li><a href="http://www.xilinx.com/ise/optional_prod/cspro.htm">ChipScope Pro 9.1.03i</a></li>
+			<li><a href="http://www.xilinx.com/ise/optional_prod/cspro.htm">ChipScope Pro 9.1.02i</a></li>
+			<li><a href="http://www.xilinx.com/ise/optional_prod/cspro.htm">ChipScope Pro 8.2.04i</a></li>
+			<li><a href="http://www.xilinx.com/ise/embedded_design_prod/platform_studio.htm">EDK 8.2.02i</a></li>
+		</ul>
+		<H2>Download</H2>
+		<ul>
+			<li>Download <a href="http://cvs.zerfleddert.de/cgi-bin/viewcvs.cgi/usb-driver.tar.gz">usb-driver.tar.gz</a></li>
+			<li>Read the <a href="http://cvs.zerfleddert.de/cgi-bin/viewcvs.cgi/*checkout*/usb-driver/README">README</a></li>
+			<li>Browse the <a href="http://cvs.zerfleddert.de/cgi-bin/viewcvs.cgi/usb-driver/">CVS repository</a></li>
+		</ul>
+		<HR>
+		<FONT SIZE="-1"><I><A HREF="mailto:cabledriver@zerfleddert.de">Michael Gernoth</A>, $Id: index.html,v 1.1 2007-04-06 12:21:44 michael Exp $</I></FONT>
+	</BODY>
+</HTML>
