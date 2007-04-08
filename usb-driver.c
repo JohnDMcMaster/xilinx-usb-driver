@@ -48,8 +48,9 @@ static int windrvrfd = -1;
 static int parportfd = -1;
 static unsigned long ppbase = 0;
 static unsigned long ecpbase = 0;
-static struct pports *pplist = NULL;
 FILE *modulesfp = NULL;
+FILE *baseaddrfp = NULL;
+int baseaddrnum = 0;
 static int modules_read = 0;
 static struct usb_bus *busses = NULL;
 static struct usb_device *usbdevice;
@@ -354,7 +355,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
-			strcpy(version->version, "libusb-driver.so $Revision: 1.59 $");
+			strcpy(version->version, "libusb-driver.so $Revision: 1.60 $");
 			version->versionul = 802;
 			DPRINTF("VERSION\n");
 			break;
@@ -385,36 +386,8 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
 				if (parportfd < 0) {
-					int max = -1;
-					struct pports **port = &pplist;
-
-					while (*port) {
-						DPRINTF("Looking up parallel port in linked list, entry: %d\n", (*port)->num);
-						if (max < (*port)->num)
-							max = (*port)->num;
-
-						if ((*port)->base == (unsigned long)cr->Card.Item[0].I.IO.dwAddr) {
-							break;
-						}
-
-						port = &((*port)->next);
-					}
-
-					if (!(*port)) { /* not found */
-						(*port) = malloc(sizeof(struct pports));
-						if (!(*port)) {
-							perror("malloc");
-							exit(EXIT_FAILURE);
-						}
-
-						(*port)->base = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;
-						(*port)->num = max+1;
-						(*port)->next = NULL;
-
-						DPRINTF("parallel port not in linked list, new entry: %d\n", (*port)->num);
-					}
-
-					snprintf(ppdev, sizeof(ppdev), "/dev/parport%d", (*port)->num);
+					snprintf(ppdev, sizeof(ppdev), "/dev/parport%lu",
+						(unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
 					DPRINTF("opening %s\n", ppdev);
 					parportfd = open(ppdev, O_RDWR|O_EXCL);
 
@@ -976,18 +949,31 @@ int close(int fd) {
 FILE *fopen(const char *path, const char *mode) {
 	FILE *ret;
 	static FILE* (*func) (const char*, const char*) = NULL;
+	char buf[256];
+	int i;
 
 	if (!func)
 		func = (FILE* (*) (const char*, const char*)) dlsym(RTLD_NEXT, "fopen");
 
 	ret = (*func) (path, mode);
 
-	if (!strcmp (path, "/proc/modules")) {
+	if (!strcmp(path, "/proc/modules")) {
 		DPRINTF("opening /proc/modules\n");
 #ifdef NO_WINDRVR
 		modulesfp = ret;
 		modules_read = 0;
 #endif
+	}
+	
+	if (ret) {
+		for (i = 0; i < 4; i++) {
+			snprintf(buf, sizeof(buf), "/proc/sys/dev/parport/parport%d/base-addr", i);
+			if (!strcmp(path, buf)) {
+				DPRINTF("open base-addr of parport%d\n", i);
+				baseaddrfp = ret;
+				baseaddrnum = i;
+			}
+		}
 	}
 
 	return ret;
@@ -996,6 +982,7 @@ FILE *fopen(const char *path, const char *mode) {
 char *fgets(char *s, int size, FILE *stream) {
         static char* (*func) (char*, int, FILE*) = NULL;
 	const char modules[][256] = {"windrvr6 1 0 - Live 0xdeadbeef\n", "parport_pc 1 0 - Live 0xdeadbeef\n"};
+	char buf[256];
 	char *ret = NULL;
 
 
@@ -1008,6 +995,11 @@ char *fgets(char *s, int size, FILE *stream) {
 			ret = s;
 			modules_read++;
 		}
+	} else if (baseaddrfp == stream) {
+		snprintf(s, sizeof(buf), "%d\t%d\n",
+			(baseaddrnum) * 0x10,
+			((baseaddrnum) * 0x10) + 0x400);
+		ret = s;
 	} else {
 		ret = (*func)(s,size,stream);
 	}
@@ -1023,6 +1015,10 @@ int fclose(FILE *fp) {
 
 	if (fp == modulesfp) {
 		modulesfp = NULL;
+	}
+
+	if (fp == baseaddrfp) {
+		baseaddrfp = NULL;
 	}
 	
 	return (*func)(fp);

@@ -33,12 +33,6 @@
 
 #define WDU_GET_MAX_PACKET_SIZE(x)                ((unsigned short) (((x) & 0x7ff) * (1 + (((x) & 0x1800) >> 11))))
 
-struct pports {
-	unsigned long base;
-	int num;
-	struct pports *next;
-};
-
 /* http://www.jungo.com/support/documentation/windriver/811/wdusb_man_mhtml/node78.html#SECTION001734000000000000000 */
 
 struct header_struct {
