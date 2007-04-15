@@ -18,6 +18,7 @@ the following software:
  * ChipScope 9.1.02i
  * ChipScope 8.2.04i
  * EDK 8.2.02i
+ * EDK 8.1.02i
 
 Build the library by calling `make'.
 
