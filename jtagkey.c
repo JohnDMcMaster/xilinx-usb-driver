@@ -3,10 +3,13 @@
 #include "usb-driver.h"
 #include "jtagkey.h"
 
+#define USBBUFSIZE 384
+
 static struct ftdi_context ftdic;
 
 int jtagkey_init(unsigned short vid, unsigned short pid) {
 	int ret = 0;
+	unsigned char c;
 
 	if ((ret = ftdi_init(&ftdic)) != 0) {
 		fprintf(stderr, "unable to initialise libftdi: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
@@ -29,7 +32,7 @@ int jtagkey_init(unsigned short vid, unsigned short pid) {
 	}
 
 #if 0
-	if ((ret = ftdi_write_data_set_chunksize(&ftdic, 3))  != 0) {
+	if ((ret = ftdi_write_data_set_chunksize(&ftdic, 1))  != 0) {
 		fprintf(stderr, "unable to set write chunksize: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
@@ -40,10 +43,13 @@ int jtagkey_init(unsigned short vid, unsigned short pid) {
 		return ret;
 	}
 
-	if ((ret = ftdi_set_baudrate(&ftdic, 1000000))  != 0) {
+	if ((ret = ftdi_set_baudrate(&ftdic, 500000))  != 0) {
 		fprintf(stderr, "unable to set baudrate: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
+
+	c = 0x00;
+	ftdi_write_data(&ftdic, &c, 1);
 
 	if ((ret = ftdi_set_bitmode(&ftdic, JTAGKEY_TCK|JTAGKEY_TDI|JTAGKEY_TMS|JTAGKEY_OEn, BITMODE_SYNCBB))  != 0) {
 		fprintf(stderr, "unable to enable bitbang mode: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
@@ -88,13 +94,34 @@ void jtagkey_state(unsigned char data) {
 int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, int ecpbase, int num) {
 	int ret = 0;
 	int i;
+	int nread = 0;
 	unsigned long port;
 	unsigned char val;
-	static unsigned char last_write = 0, last_data = 0;
+	static unsigned char last_data = 0;
+	static unsigned char writebuf[USBBUFSIZE], *writepos = writebuf;
+	static unsigned char readbuf[USBBUFSIZE], *readpos;
 	unsigned char data;
-	unsigned char writebuf[4096], readbuf[4096], *pos;
+	static unsigned char last_write = 0x00;
 
-	pos = writebuf;
+	/* Count writes */
+	for (i = 0; i < num; i++)
+		if (tr[i].cmdTrans == 10)
+			nread++;
+
+	/* Write combining */
+	if ((writepos-writebuf > sizeof(writebuf)-num) || (nread && writepos-writebuf)) {
+		DPRINTF("writing %d bytes due to %d following reads in %d chunks or full buffer\n", writepos-writebuf, nread, num);
+
+		ftdi_write_data(&ftdic, writebuf, writepos-writebuf);
+
+		i = 0;
+		while (i < writepos-writebuf) {
+			i += ftdi_read_data(&ftdic, readbuf, sizeof(readbuf));
+		};
+		DPRINTF("read %d/%d bytes\n", i, writepos-writebuf);
+		writepos = writebuf;
+	}
+
 	for (i = 0; i < num; i++) {
 		DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
 				(unsigned long)tr[i].dwPort, tr[i].cmdTrans, tr[i].dwBytes,
@@ -109,10 +136,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 #endif
 
 		/* Pad writebuf for read-commands in stream */
-		if (tr[i].cmdTrans == 10) {
-			*pos = last_data;
-			pos++;
-		}
+		*writepos = last_data;
 
 		if (port == ppbase + PP_DATA) {
 			DPRINTF("data port\n");
@@ -143,16 +167,22 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 						DPRINTF("!TMS\n");
 					}
 					if (val & PP_CTRL) {
-						data |= JTAGKEY_OEn;
+						data = JTAGKEY_OEn;
 						DPRINTF("CTRL\n");
 					} else {
 						DPRINTF("!CTRL\n");
 					}
-					*pos = data;
-					pos++;
 
-					last_write = val;
+					if (val & PP_PROG) {
+						DPRINTF("PROG\n");
+					} else {
+						DPRINTF("!PROG\n");
+					}
+
+					*writepos = data;
+
 					last_data = data;
+					last_write = val;
 					break;
 
 				default:
@@ -161,27 +191,35 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 					break;
 			}
 		}
+		writepos++;
 	}
 
-	ftdi_usb_purge_buffers(&ftdic);
-	ftdi_write_data(&ftdic, writebuf, pos-writebuf);
+	if (nread)
+	{
+		DPRINTF("writing %d bytes\n", writepos-writebuf);
+		ftdi_write_data(&ftdic, writebuf, writepos-writebuf);
+		DPRINTF("reading %d bytes\n", writepos-writebuf);
 
-	i = 0;
-	do {
-#if 0
-		ftdi_write_data(&ftdic, &last_data, 1);
-#endif
-		i += ftdi_read_data(&ftdic, readbuf, sizeof(readbuf));
-	} while (i < pos-writebuf);
+		i = 0;
+		while (i < writepos-writebuf) {
+			i += ftdi_read_data(&ftdic, readbuf, sizeof(readbuf));
+		}
+		DPRINTF("read %d bytes\n", i);
 
 #ifdef DEBUG
-	DPRINTF("write: ");
-	hexdump(writebuf, pos-writebuf);
-	DPRINTF("read: ");
-	hexdump(readbuf, i);
+		DPRINTF("write: ");
+		hexdump(writebuf, writepos-writebuf);
+		DPRINTF("read: ");
+		hexdump(readbuf, i);
 #endif
 
-	pos = readbuf;
+		writepos = writebuf;
+	} else {
+		return ret;
+	}
+
+	readpos = readbuf;
+	readpos += 0;
 
 	for (i = 0; i < num; i++) {
 		DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
@@ -190,21 +228,28 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 
 		port = (unsigned long)tr[i].dwPort;
 		val = tr[i].Data.Byte;
-		pos++;
+		readpos++;
 
-		if (port == ppbase + PP_STATUS) {
-			DPRINTF("status port (last write: %d)\n", last_write);
+		if (port == ppbase + PP_DATA) {
+			if (tr[i].cmdTrans == PP_WRITE) {
+				last_write = val;
+			}
+		} else if (port == ppbase + PP_STATUS) {
+			DPRINTF("status port (last write: 0x%x)\n", last_write);
 			switch(tr[i].cmdTrans) {
 				case PP_READ:
-					data = *pos;
+					data = *readpos;
 #ifdef DEBUG
 					DPRINTF("READ: 0x%x\n", data);
 					jtagkey_state(data);
 #endif
 
 					val = 0x00;
-					if (data & JTAGKEY_TDO)
+					if ((data & JTAGKEY_TDO) && (last_write & PP_PROG))
 						val |= PP_TDO;
+
+					if (!(last_write & PP_PROG))
+						val |= 0x08;
 
 					if (last_write & 0x40)
 						val |= 0x20;

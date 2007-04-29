@@ -33,6 +33,7 @@
 
 #define PP_TDI			0x01
 #define PP_TDO			0x10
+#define PP_PROG			0x10
 #define PP_TCK			0x02
 #define PP_TMS			0x04
 #define PP_CTRL			0x08

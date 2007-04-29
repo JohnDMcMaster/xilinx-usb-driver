@@ -349,7 +349,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
-			strcpy(version->version, "libusb-driver.so $Revision: 1.64 $");
+			strcpy(version->version, "libusb-driver.so $Revision: 1.65 $");
 			version->versionul = 802;
 			DPRINTF("VERSION\n");
 			break;
@@ -800,6 +800,11 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
+#ifdef JTAGKEY
+				if (cr->hCard == 0xff)
+					jtagkey_close();
+#endif
+
 				if (parportfd == cr->hCard && parportfd >= 0) {
 					ioctl(parportfd, PPRELEASE);
 					close(parportfd);
