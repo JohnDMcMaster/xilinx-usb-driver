@@ -28,22 +28,24 @@ int jtagkey_init(unsigned short vid, unsigned short pid) {
 		return ret;
 	}
 
-	if ((ret = ftdi_write_data_set_chunksize(&ftdic, 1))  != 0) {
+#if 0
+	if ((ret = ftdi_write_data_set_chunksize(&ftdic, 3))  != 0) {
 		fprintf(stderr, "unable to set write chunksize: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
+#endif
 
 	if ((ret = ftdi_set_latency_timer(&ftdic, 1))  != 0) {
 		fprintf(stderr, "unable to set latency timer: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
 
-	if ((ret = ftdi_set_baudrate(&ftdic, 230400))  != 0) {
+	if ((ret = ftdi_set_baudrate(&ftdic, 1000000))  != 0) {
 		fprintf(stderr, "unable to set baudrate: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
 
-	if ((ret = ftdi_set_bitmode(&ftdic, JTAGKEY_TCK|JTAGKEY_TDI|JTAGKEY_TMS|JTAGKEY_OEn, 1))  != 0) {
+	if ((ret = ftdi_set_bitmode(&ftdic, JTAGKEY_TCK|JTAGKEY_TDI|JTAGKEY_TMS|JTAGKEY_OEn, BITMODE_SYNCBB))  != 0) {
 		fprintf(stderr, "unable to enable bitbang mode: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
@@ -88,9 +90,11 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 	int i;
 	unsigned long port;
 	unsigned char val;
-	static unsigned char last_write = 0;
+	static unsigned char last_write = 0, last_data = 0;
 	unsigned char data;
+	unsigned char writebuf[4096], readbuf[4096], *pos;
 
+	pos = writebuf;
 	for (i = 0; i < num; i++) {
 		DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
 				(unsigned long)tr[i].dwPort, tr[i].cmdTrans, tr[i].dwBytes,
@@ -103,6 +107,12 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		if (tr[i].cmdTrans == 13)
 			DPRINTF("write byte: %d\n", val);
 #endif
+
+		/* Pad writebuf for read-commands in stream */
+		if (tr[i].cmdTrans == 10) {
+			*pos = last_data;
+			pos++;
+		}
 
 		if (port == ppbase + PP_DATA) {
 			DPRINTF("data port\n");
@@ -138,15 +148,11 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 					} else {
 						DPRINTF("!CTRL\n");
 					}
-					ftdi_write_data(&ftdic, &data, 1);
-
-#if 0
-					do {
-						ftdi_read_pins(&ftdic, &tmp);
-					} while ((tmp & (JTAGKEY_TDI|JTAGKEY_TMS|JTAGKEY_TCK|JTAGKEY_TDI)) != data);
-#endif
+					*pos = data;
+					pos++;
 
 					last_write = val;
+					last_data = data;
 					break;
 
 				default:
@@ -154,11 +160,43 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 					ret = -1;
 					break;
 			}
-		} else if (port == ppbase + PP_STATUS) {
+		}
+	}
+
+	ftdi_usb_purge_buffers(&ftdic);
+	ftdi_write_data(&ftdic, writebuf, pos-writebuf);
+
+	i = 0;
+	do {
+#if 0
+		ftdi_write_data(&ftdic, &last_data, 1);
+#endif
+		i += ftdi_read_data(&ftdic, readbuf, sizeof(readbuf));
+	} while (i < pos-writebuf);
+
+#ifdef DEBUG
+	DPRINTF("write: ");
+	hexdump(writebuf, pos-writebuf);
+	DPRINTF("read: ");
+	hexdump(readbuf, i);
+#endif
+
+	pos = readbuf;
+
+	for (i = 0; i < num; i++) {
+		DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
+				(unsigned long)tr[i].dwPort, tr[i].cmdTrans, tr[i].dwBytes,
+				tr[i].fAutoinc, tr[i].dwOptions);
+
+		port = (unsigned long)tr[i].dwPort;
+		val = tr[i].Data.Byte;
+		pos++;
+
+		if (port == ppbase + PP_STATUS) {
 			DPRINTF("status port (last write: %d)\n", last_write);
 			switch(tr[i].cmdTrans) {
 				case PP_READ:
-					ftdi_read_pins(&ftdic, &data);
+					data = *pos;
 #ifdef DEBUG
 					DPRINTF("READ: 0x%x\n", data);
 					jtagkey_state(data);
@@ -183,16 +221,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 					ret = -1;
 					break;
 			}
-		} else if (port == ppbase + PP_CONTROL) {
-			DPRINTF("control port\n");
-		} else if ((port == ecpbase + PP_ECP_CFGA) && ecpbase) {
-			DPRINTF("ECP_CFGA port\n");
-		} else if ((port == ecpbase + PP_ECP_CFGB) && ecpbase) {
-			DPRINTF("ECP_CFGB port\n");
-		} else if ((port == ecpbase + PP_ECP_ECR) && ecpbase) {
-			DPRINTF("ECP_ECR port\n");
 		} else {
-			DPRINTF("access to unsupported address range!\n");
 			ret = 0;
 		}
 

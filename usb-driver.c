@@ -65,7 +65,6 @@ static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
 
 #define NO_WINDRVR 1
 
-#ifdef DEBUG
 void hexdump(unsigned char *buf, int len) {
 	int i;
 
@@ -76,7 +75,6 @@ void hexdump(unsigned char *buf, int len) {
 	}
 	fprintf(stderr,"\n");
 }
-#endif
 
 int usb_deviceinfo(unsigned char *buf) {
 	int i,j,k,l;
@@ -351,7 +349,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
-			strcpy(version->version, "libusb-driver.so $Revision: 1.63 $");
+			strcpy(version->version, "libusb-driver.so $Revision: 1.64 $");
 			version->versionul = 802;
 			DPRINTF("VERSION\n");
 			break;
