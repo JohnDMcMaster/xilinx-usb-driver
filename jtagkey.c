@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <ftdi.h>
+#include <unistd.h>
 #include "usb-driver.h"
 #include "jtagkey.h"
 
@@ -7,6 +8,7 @@
 
 static struct ftdi_context ftdic;
 static unsigned int usb_maxlen = 0;
+static unsigned char bitbang_mode;
 
 int jtagkey_init(unsigned short vid, unsigned short pid) {
 	int ret = 0;
@@ -56,6 +58,8 @@ int jtagkey_init(unsigned short vid, unsigned short pid) {
 		return ret;
 	}
 
+	bitbang_mode = BITMODE_BITBANG;
+
 	if ((ret = ftdi_usb_purge_buffers(&ftdic))  != 0) {
 		fprintf(stderr, "unable to purge buffers: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
@@ -68,6 +72,30 @@ void jtagkey_close() {
 	ftdi_disable_bitbang(&ftdic);
 	ftdi_usb_close(&ftdic);
 	ftdi_deinit(&ftdic);
+}
+
+static int jtagkey_set_bbmode(unsigned char mode) {
+	int ret = 0;
+
+	if (bitbang_mode != mode) {
+		DPRINTF("switching bitbang-mode!\n");
+		/* Wait for the latency-timer to kick in */
+		usleep(2);
+		if ((ret = ftdi_set_bitmode(&ftdic, JTAGKEY_TCK|JTAGKEY_TDI|JTAGKEY_TMS|JTAGKEY_OEn, mode))  != 0) {
+			fprintf(stderr, "unable to enable bitbang mode: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
+			return ret;
+		}
+		if ((ret = ftdi_usb_purge_buffers(&ftdic))  != 0) {
+			fprintf(stderr, "unable to purge buffers: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
+			return ret;
+		}
+		/* Wait for the FTDI2232 to settle */
+		usleep(2);
+
+		bitbang_mode = mode;
+	}
+
+	return ret;
 }
 
 void jtagkey_state(unsigned char data) {
@@ -114,6 +142,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		int len;
 		DPRINTF("writing %d bytes due to %d following reads in %d chunks or full buffer\n", writepos-writebuf, nread, num);
 
+		jtagkey_set_bbmode(BITMODE_BITBANG);
 		while (pos < writepos) {
 			len = writepos-pos;
 
@@ -207,36 +236,12 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 	if (nread)
 	{
 		DPRINTF("writing %d bytes\n", writepos-writebuf);
-		for (i=0; i<writepos-writebuf; i++) {
-#if 1
-			int combine = i;
-			
-			do {
-				if (combine > 0 &&
-					tr[combine-1].cmdTrans == PP_READ) {
-					break;
-				} else {
-					combine++;
-				}
-			} while (combine < writepos-writebuf);
+		jtagkey_set_bbmode(BITMODE_SYNCBB);
+		ftdi_write_data(&ftdic, writebuf, writepos-writebuf);
 
-			DPRINTF("combined writes before read: %d\n", combine);
-
-			if ((combine-i)-1 > 0) {
-				ftdi_write_data(&ftdic, writebuf+i, (combine-i)-1);
-				i = combine-1;
-			}
-#endif
-
-			ftdi_write_data(&ftdic, writebuf+i, 1);
-
-			if (i > 0 && tr[i].cmdTrans == PP_WRITE && tr[i-1].cmdTrans == PP_READ)
-				ftdi_read_pins(&ftdic, readbuf+i);
-
-			if (i == (writepos-writebuf)-1 && tr[i].cmdTrans == PP_READ) {
-				ftdi_write_data(&ftdic, writebuf+i, 1);
-				ftdi_read_pins(&ftdic, readbuf+i+1);
-			}
+		i = 0;
+		while (i < writepos-writebuf) {
+			i += ftdi_read_data(&ftdic, readbuf, sizeof(readbuf));
 		}
 
 #ifdef DEBUG
