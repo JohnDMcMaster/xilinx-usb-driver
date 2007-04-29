@@ -238,17 +238,11 @@ int usb_deviceinfo(unsigned char *buf) {
 	return len;
 }
 
-int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wdioctl) {
+int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request) {
 	int ret = 0;
 	unsigned long port = (unsigned long)tr->dwPort;
 	unsigned char val;
 	static unsigned char last_pp_write = 0;
-
-#ifdef JTAGKEY
-	/* FIXME: Config file and mor intelligent mapping! */
-	if (ppbase == 0x30)
-		return jtagkey_transfer(tr, fd, request, ppbase, ecpbase, 1);
-#endif
 
 	DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
 			(unsigned long)tr->dwPort, tr->cmdTrans, tr->dwBytes,
@@ -261,9 +255,6 @@ int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wd
 		DPRINTF("write byte: %d\n", val);
 #endif
 
-#ifndef NO_WINDRVR
-	ret = (*ioctl_func) (fd, request, wdioctl);
-#else
 	if (parportfd < 0)
 		return ret;
 
@@ -335,7 +326,6 @@ int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wd
 	}
 
 	tr->Data.Byte = val;
-#endif
 
 	DPRINTF("dwPortReturn: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
 			(unsigned long)tr->dwPort, tr->cmdTrans, tr->dwBytes,
@@ -361,7 +351,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
-			strcpy(version->version, "libusb-driver.so $Revision: 1.62 $");
+			strcpy(version->version, "libusb-driver.so $Revision: 1.63 $");
 			version->versionul = 802;
 			DPRINTF("VERSION\n");
 			break;
@@ -715,7 +705,18 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				WD_TRANSFER *tr = (WD_TRANSFER*)(wdheader->data);
 
-				ret = pp_transfer(tr, fd, request, wdioctl);
+#ifndef NO_WINDRVR
+				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+
+#ifdef JTAGKEY
+				if (ppbase == 0x30) {
+					ret = jtagkey_transfer(tr, fd, request, ppbase, ecpbase, 1);
+					break;
+				}
+#endif /* JTAGKEY */
+				ret = pp_transfer(tr, fd, request);
+#endif
 			}
 			break;
 
@@ -726,22 +727,23 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				WD_TRANSFER *tr = (WD_TRANSFER*)(wdheader->data);
 				unsigned long num = wdheader->size/sizeof(WD_TRANSFER);
 				int i;
+#ifndef NO_WINDRVR
+				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+
+#ifdef JTAGKEY
+				/* FIXME: Config file and mor intelligent mapping! */
+				if (ppbase == 0x30) {
+					ret = jtagkey_transfer(tr, fd, request, ppbase, ecpbase, num);
+					break;
+				}
+#endif /* JTAGKEY */
 
 				for (i = 0; i < num; i++) {
 					DPRINTF("Transfer %d:\n", i+1);
-#ifndef NO_WINDRVR
-					wdheader->size = sizeof(WD_TRANSFER);
-					request = TRANSFER;
-					wdheader->data = tr + i;
-#endif
-					ret = pp_transfer(tr + i, fd, request, wdioctl);
+					ret = pp_transfer(tr + i, fd, request);
 				}
-
-#ifndef NO_WINDRVR
-				wdheader->data = tr;
 #endif
-
-				return ret;
 			}
 			break;
 
