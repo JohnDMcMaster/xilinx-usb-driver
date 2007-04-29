@@ -98,14 +98,14 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 	unsigned long port;
 	unsigned char val;
 	static unsigned char last_data = 0;
+	static unsigned char last_write = 0x00;
 	static unsigned char writebuf[USBBUFSIZE], *writepos = writebuf;
 	static unsigned char readbuf[USBBUFSIZE], *readpos;
-	unsigned char data;
-	static unsigned char last_write = 0x00;
+	unsigned char data, prev_data;
 
-	/* Count writes */
+	/* Count reads */
 	for (i = 0; i < num; i++)
-		if (tr[i].cmdTrans == 10)
+		if (tr[i].cmdTrans == PP_READ)
 			nread++;
 
 	/* Write combining */
@@ -117,7 +117,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		i = 0;
 		while (i < writepos-writebuf) {
 			i += ftdi_read_data(&ftdic, readbuf, sizeof(readbuf));
-		};
+		}
 		DPRINTF("read %d/%d bytes\n", i, writepos-writebuf);
 		writepos = writebuf;
 	}
@@ -137,6 +137,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 
 		/* Pad writebuf for read-commands in stream */
 		*writepos = last_data;
+		prev_data = last_data;
 
 		if (port == ppbase + PP_DATA) {
 			DPRINTF("data port\n");
@@ -191,7 +192,9 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 					break;
 			}
 		}
-		writepos++;
+
+		if (nread || (*writepos != prev_data))
+			writepos++;
 	}
 
 	if (nread)
