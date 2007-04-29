@@ -42,6 +42,9 @@
 #include <linux/parport.h>
 #include <linux/ppdev.h>
 #include "usb-driver.h"
+#ifdef JTAGKEY
+#include "jtagkey.h"
+#endif
 
 static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = -1;
@@ -63,7 +66,6 @@ static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
 #define NO_WINDRVR 1
 
 #ifdef DEBUG
-#define DPRINTF(format, args...) fprintf(stderr, format, ##args)
 void hexdump(unsigned char *buf, int len) {
 	int i;
 
@@ -74,8 +76,6 @@ void hexdump(unsigned char *buf, int len) {
 	}
 	fprintf(stderr,"\n");
 }
-#else
-#define DPRINTF(format, args...)
 #endif
 
 int usb_deviceinfo(unsigned char *buf) {
@@ -242,7 +242,13 @@ int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wd
 	int ret = 0;
 	unsigned long port = (unsigned long)tr->dwPort;
 	unsigned char val;
-	static int last_pp_write = 0;
+	static unsigned char last_pp_write = 0;
+
+#ifdef JTAGKEY
+	/* FIXME: Config file and mor intelligent mapping! */
+	if (ppbase == 0x30)
+		return jtagkey_transfer(tr, fd, request, ppbase, ecpbase, 1);
+#endif
 
 	DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
 			(unsigned long)tr->dwPort, tr->cmdTrans, tr->dwBytes,
@@ -284,11 +290,11 @@ int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, unsigned char *wd
 			case PP_READ:
 				ret = ioctl(parportfd, PPRSTATUS, &val);
 #ifdef FORCE_PC3_IDENT
-				val &= 95;
-				if (last_pp_write & 64)
-					val |= 32;
+				val &= 0x5f;
+				if (last_pp_write & 0x40)
+					val |= 0x20;
 				else
-					val |= 128;
+					val |= 0x80;
 #endif
 				break;
 
@@ -355,7 +361,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
-			strcpy(version->version, "libusb-driver.so $Revision: 1.60 $");
+			strcpy(version->version, "libusb-driver.so $Revision: 1.61 $");
 			version->versionul = 802;
 			DPRINTF("VERSION\n");
 			break;
@@ -385,46 +391,61 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				if (parportfd < 0) {
-					snprintf(ppdev, sizeof(ppdev), "/dev/parport%lu",
-						(unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
-					DPRINTF("opening %s\n", ppdev);
-					parportfd = open(ppdev, O_RDWR|O_EXCL);
-
-					if (parportfd < 0)
-						fprintf(stderr,"Can't open %s: %s\n", ppdev, strerror(errno));
-				}
-
-				if (parportfd >= 0) {
-					int pmode;
-
-					if (ioctl(parportfd, PPCLAIM) == -1)
-						return ret;
-
-					ecpbase = 0;
-					pmode = IEEE1284_MODE_COMPAT;
-					if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
-						return ret;
-					
-					if (cr->Card.dwItems > 1 && cr->Card.Item[1].I.IO.dwAddr) {
-						DPRINTF("ECP mode requested\n");
-						ecpbase = (unsigned long)cr->Card.Item[1].I.IO.dwAddr;
-						/* TODO: Implement ECP mode */
-#if 0
-						pmode = IEEE1284_MODE_ECP;
-
-						if (ioctl(parportfd, PPNEGOT, &pmode) == -1) {
-							ecpbase = 0;
-							pmode = IEEE1284_MODE_COMPAT;
-							if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
-								return ret;
-						}
+				
+				/* FIXME: Ugly hack which maps amontec JtagKey to 4. parallel port */
+#ifdef JTAGKEY
+				if ((unsigned long)cr->Card.Item[0].I.IO.dwAddr != 0x30)
 #endif
+				{
+					if (parportfd < 0) {
+						snprintf(ppdev, sizeof(ppdev), "/dev/parport%lu",
+								(unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
+						DPRINTF("opening %s\n", ppdev);
+						parportfd = open(ppdev, O_RDWR|O_EXCL);
+
+						if (parportfd < 0)
+							fprintf(stderr,"Can't open %s: %s\n", ppdev, strerror(errno));
 					}
 
-					cr->hCard = parportfd;
-					ppbase = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;
+					if (parportfd >= 0) {
+						int pmode;
+
+						if (ioctl(parportfd, PPCLAIM) == -1)
+							return ret;
+
+						ecpbase = 0;
+						pmode = IEEE1284_MODE_COMPAT;
+						if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
+							return ret;
+
+						if (cr->Card.dwItems > 1 && cr->Card.Item[1].I.IO.dwAddr) {
+							DPRINTF("ECP mode requested\n");
+							ecpbase = (unsigned long)cr->Card.Item[1].I.IO.dwAddr;
+							/* TODO: Implement ECP mode */
+#if 0
+							pmode = IEEE1284_MODE_ECP;
+
+							if (ioctl(parportfd, PPNEGOT, &pmode) == -1) {
+								ecpbase = 0;
+								pmode = IEEE1284_MODE_COMPAT;
+								if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
+									return ret;
+							}
+#endif
+						}
+
+						cr->hCard = parportfd;
+					}
+#ifdef JTAGKEY
+				} else {
+					ret=jtagkey_init(0x0403, 0xcff8); /* I need a config file... */
+					cr->hCard = 0xff;
+#endif
 				}
+
+				ppbase = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;
+				if (ret < 0)
+					cr->hCard = 0;
 #endif
 				DPRINTF("hCard: %lu\n", cr->hCard);
 			}
@@ -705,7 +726,6 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				unsigned long num = wdheader->size/sizeof(WD_TRANSFER);
 				int i;
 
-
 				for (i = 0; i < num; i++) {
 					DPRINTF("Transfer %d:\n", i+1);
 #ifndef NO_WINDRVR
@@ -955,7 +975,13 @@ FILE *fopen(const char *path, const char *mode) {
 	if (!func)
 		func = (FILE* (*) (const char*, const char*)) dlsym(RTLD_NEXT, "fopen");
 
-	ret = (*func) (path, mode);
+#ifdef JTAGKEY
+	/* FIXME: Hack for parport mapping */
+	if (!strcmp(path, "/proc/sys/dev/parport/parport3/base-addr")) {
+		ret = (*func) ("/dev/null", mode);
+	} else
+#endif
+		ret = (*func) (path, mode);
 
 	if (!strcmp(path, "/proc/modules")) {
 		DPRINTF("opening /proc/modules\n");

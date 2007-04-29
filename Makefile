@@ -2,15 +2,21 @@
 #a Parallel Cable III
 CFLAGS=-Wall -fPIC #-DFORCE_PC3_IDENT
 
+FTDI := $(shell libftdi-config --libs 2>/dev/null)
+ifneq ($(FTDI),)
+JTAGKEYSRC = jtagkey.c
+CFLAGS += -DJTAGKEY
+endif
+
 SOBJECTS=libusb-driver.so libusb-driver-DEBUG.so
 
 all: $(SOBJECTS)
 
-libusb-driver.so: usb-driver.c usb-driver.h Makefile
-	gcc $(CFLAGS) $< -o $@ -ldl -lusb -lpthread -shared
+libusb-driver.so: usb-driver.c jtagkey.c usb-driver.h jtagkey.h Makefile
+	gcc $(CFLAGS) usb-driver.c $(JTAGKEYSRC) -o $@ -ldl -lusb -lpthread $(FTDI) -shared
 
-libusb-driver-DEBUG.so: usb-driver.c usb-driver.h Makefile
-	gcc -DDEBUG $(CFLAGS) $< -o $@ -ldl -lusb -lpthread -shared
+libusb-driver-DEBUG.so: usb-driver.c jtagkey.c usb-driver.h jtagkey.h Makefile
+	gcc -DDEBUG $(CFLAGS) usb-driver.c $(JTAGKEYSRC) -o $@ -ldl -lusb -lpthread $(FTDI) -shared
 
 clean:
 	rm -f $(SOBJECTS)

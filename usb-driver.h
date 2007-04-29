@@ -31,6 +31,18 @@
 #define PP_READ			10
 #define PP_WRITE		13
 
+#define PP_TDI			0x01
+#define PP_TDO			0x10
+#define PP_TCK			0x02
+#define PP_TMS			0x04
+#define PP_CTRL			0x08
+
+#ifdef DEBUG
+#define DPRINTF(format, args...) fprintf(stderr, format, ##args)
+#else
+#define DPRINTF(format, args...)
+#endif
+
 #define WDU_GET_MAX_PACKET_SIZE(x)                ((unsigned short) (((x) & 0x7ff) * (1 + (((x) & 0x1800) >> 11))))
 
 /* http://www.jungo.com/support/documentation/windriver/811/wdusb_man_mhtml/node78.html#SECTION001734000000000000000 */
