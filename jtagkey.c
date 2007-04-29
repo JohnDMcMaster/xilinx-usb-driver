@@ -209,7 +209,9 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		DPRINTF("writing %d bytes\n", writepos-writebuf);
 		for (i=0; i<writepos-writebuf; i++) {
 			ftdi_write_data(&ftdic, writebuf+i, 1);
-			ftdi_read_pins(&ftdic, readbuf+i);
+
+			if (i > 0 && tr[i].cmdTrans == PP_WRITE && tr[i-1].cmdTrans == PP_READ)
+				ftdi_read_pins(&ftdic, readbuf+i);
 		}
 
 #ifdef DEBUG
