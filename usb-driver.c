@@ -42,6 +42,7 @@
 #include <linux/parport.h>
 #include <linux/ppdev.h>
 #include "usb-driver.h"
+#include "config.h"
 #ifdef JTAGKEY
 #include "jtagkey.h"
 #endif
@@ -349,7 +350,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
-			strcpy(version->version, "libusb-driver.so $Revision: 1.65 $");
+			strcpy(version->version, "libusb-driver.so $Revision: 1.66 $");
 			version->versionul = 802;
 			DPRINTF("VERSION\n");
 			break;
@@ -380,10 +381,11 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
 				
-				/* FIXME: Ugly hack which maps amontec JtagKey to 4. parallel port */
 #ifdef JTAGKEY
-				if ((unsigned long)cr->Card.Item[0].I.IO.dwAddr == 0x30) {
-					ret=jtagkey_init(0x0403, 0xcff8); /* I need a config file... */
+				if (!config_is_real_pport((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10)) {
+					int num = (unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10;
+
+					ret=jtagkey_init(config_usb_vid(num), config_usb_pid(num));
 					cr->hCard = 0xff;
 					ppbase = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;
 					if (ret < 0)
@@ -392,6 +394,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					break;
 				}
 #endif
+
 				if (parportfd < 0) {
 					snprintf(ppdev, sizeof(ppdev), "/dev/parport%lu",
 							(unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
@@ -708,7 +711,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #else
 
 #ifdef JTAGKEY
-				if (ppbase == 0x30) {
+				if (!config_is_real_pport(ppbase / 0x10)) {
 					ret = jtagkey_transfer(tr, fd, request, ppbase, ecpbase, 1);
 					break;
 				}
@@ -730,8 +733,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #else
 
 #ifdef JTAGKEY
-				/* FIXME: Config file and mor intelligent mapping! */
-				if (ppbase == 0x30) {
+				if (!config_is_real_pport(ppbase / 0x10)) {
 					ret = jtagkey_transfer(tr, fd, request, ppbase, ecpbase, num);
 					break;
 				}
@@ -981,13 +983,26 @@ FILE *fopen(const char *path, const char *mode) {
 	if (!func)
 		func = (FILE* (*) (const char*, const char*)) dlsym(RTLD_NEXT, "fopen");
 
-#ifdef JTAGKEY
-	/* FIXME: Hack for parport mapping */
-	if (!strcmp(path, "/proc/sys/dev/parport/parport3/base-addr")) {
-		ret = (*func) ("/dev/null", mode);
-	} else
-#endif
-		ret = (*func) (path, mode);
+	for (i = 0; i < 4; i++) {
+		snprintf(buf, sizeof(buf), "/proc/sys/dev/parport/parport%d/base-addr", i);
+		if (!strcmp(path, buf)) {
+			DPRINTF("open base-addr of parport%d\n", i);
+			if (config_is_real_pport(i)) {
+				ret = (*func) (path, mode);
+			} else {
+				ret = (*func) ("/dev/null", mode);
+			}
+
+			if (ret) {
+				baseaddrfp = ret;
+				baseaddrnum = i;
+			}
+
+			return ret;
+		}
+	}
+
+	ret = (*func) (path, mode);
 
 	if (!strcmp(path, "/proc/modules")) {
 		DPRINTF("opening /proc/modules\n");
@@ -995,17 +1010,6 @@ FILE *fopen(const char *path, const char *mode) {
 		modulesfp = ret;
 		modules_read = 0;
 #endif
-	}
-	
-	if (ret) {
-		for (i = 0; i < 4; i++) {
-			snprintf(buf, sizeof(buf), "/proc/sys/dev/parport/parport%d/base-addr", i);
-			if (!strcmp(path, buf)) {
-				DPRINTF("open base-addr of parport%d\n", i);
-				baseaddrfp = ret;
-				baseaddrnum = i;
-			}
-		}
 	}
 
 	return ret;
