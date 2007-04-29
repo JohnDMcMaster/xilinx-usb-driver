@@ -114,9 +114,9 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		int len;
 		DPRINTF("writing %d bytes due to %d following reads in %d chunks or full buffer\n", writepos-writebuf, nread, num);
 
-		len = writepos-pos;
-
 		while (pos < writepos) {
+			len = writepos-pos;
+
 			if (len > usb_maxlen)
 				len = usb_maxlen;
 
