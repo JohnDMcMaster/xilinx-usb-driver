@@ -208,10 +208,35 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 	{
 		DPRINTF("writing %d bytes\n", writepos-writebuf);
 		for (i=0; i<writepos-writebuf; i++) {
+#if 1
+			int combine = i;
+			
+			do {
+				if (combine > 0 &&
+					tr[combine-1].cmdTrans == PP_READ) {
+					break;
+				} else {
+					combine++;
+				}
+			} while (combine < writepos-writebuf);
+
+			DPRINTF("combined writes before read: %d\n", combine);
+
+			if ((combine-i)-1 > 0) {
+				ftdi_write_data(&ftdic, writebuf+i, (combine-i)-1);
+				i = combine-1;
+			}
+#endif
+
 			ftdi_write_data(&ftdic, writebuf+i, 1);
 
 			if (i > 0 && tr[i].cmdTrans == PP_WRITE && tr[i-1].cmdTrans == PP_READ)
 				ftdi_read_pins(&ftdic, readbuf+i);
+
+			if (i == (writepos-writebuf)-1 && tr[i].cmdTrans == PP_READ) {
+				ftdi_write_data(&ftdic, writebuf+i, 1);
+				ftdi_read_pins(&ftdic, readbuf+i+1);
+			}
 		}
 
 #ifdef DEBUG
