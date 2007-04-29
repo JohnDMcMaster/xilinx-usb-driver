@@ -155,7 +155,6 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 			pos += len;
 		}
 
-		DPRINTF("read %d/%d bytes\n", i, writepos-writebuf);
 		writepos = writebuf;
 	}
 
