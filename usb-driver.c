@@ -361,7 +361,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
-			strcpy(version->version, "libusb-driver.so $Revision: 1.61 $");
+			strcpy(version->version, "libusb-driver.so $Revision: 1.62 $");
 			version->versionul = 802;
 			DPRINTF("VERSION\n");
 			break;
@@ -394,53 +394,54 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				
 				/* FIXME: Ugly hack which maps amontec JtagKey to 4. parallel port */
 #ifdef JTAGKEY
-				if ((unsigned long)cr->Card.Item[0].I.IO.dwAddr != 0x30)
-#endif
-				{
-					if (parportfd < 0) {
-						snprintf(ppdev, sizeof(ppdev), "/dev/parport%lu",
-								(unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
-						DPRINTF("opening %s\n", ppdev);
-						parportfd = open(ppdev, O_RDWR|O_EXCL);
-
-						if (parportfd < 0)
-							fprintf(stderr,"Can't open %s: %s\n", ppdev, strerror(errno));
-					}
-
-					if (parportfd >= 0) {
-						int pmode;
-
-						if (ioctl(parportfd, PPCLAIM) == -1)
-							return ret;
-
-						ecpbase = 0;
-						pmode = IEEE1284_MODE_COMPAT;
-						if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
-							return ret;
-
-						if (cr->Card.dwItems > 1 && cr->Card.Item[1].I.IO.dwAddr) {
-							DPRINTF("ECP mode requested\n");
-							ecpbase = (unsigned long)cr->Card.Item[1].I.IO.dwAddr;
-							/* TODO: Implement ECP mode */
-#if 0
-							pmode = IEEE1284_MODE_ECP;
-
-							if (ioctl(parportfd, PPNEGOT, &pmode) == -1) {
-								ecpbase = 0;
-								pmode = IEEE1284_MODE_COMPAT;
-								if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
-									return ret;
-							}
-#endif
-						}
-
-						cr->hCard = parportfd;
-					}
-#ifdef JTAGKEY
-				} else {
+				if ((unsigned long)cr->Card.Item[0].I.IO.dwAddr == 0x30) {
 					ret=jtagkey_init(0x0403, 0xcff8); /* I need a config file... */
 					cr->hCard = 0xff;
+					ppbase = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;
+					if (ret < 0)
+						cr->hCard = 0;
+
+					break;
+				}
 #endif
+				if (parportfd < 0) {
+					snprintf(ppdev, sizeof(ppdev), "/dev/parport%lu",
+							(unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
+					DPRINTF("opening %s\n", ppdev);
+					parportfd = open(ppdev, O_RDWR|O_EXCL);
+
+					if (parportfd < 0)
+						fprintf(stderr,"Can't open %s: %s\n", ppdev, strerror(errno));
+				}
+
+				if (parportfd >= 0) {
+					int pmode;
+
+					if (ioctl(parportfd, PPCLAIM) == -1)
+						return ret;
+
+					ecpbase = 0;
+					pmode = IEEE1284_MODE_COMPAT;
+					if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
+						return ret;
+
+					if (cr->Card.dwItems > 1 && cr->Card.Item[1].I.IO.dwAddr) {
+						DPRINTF("ECP mode requested\n");
+						ecpbase = (unsigned long)cr->Card.Item[1].I.IO.dwAddr;
+						/* TODO: Implement ECP mode */
+#if 0
+						pmode = IEEE1284_MODE_ECP;
+
+						if (ioctl(parportfd, PPNEGOT, &pmode) == -1) {
+							ecpbase = 0;
+							pmode = IEEE1284_MODE_COMPAT;
+							if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
+								return ret;
+						}
+#endif
+					}
+
+					cr->hCard = parportfd;
 				}
 
 				ppbase = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;
