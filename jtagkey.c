@@ -225,7 +225,6 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 	}
 
 	readpos = readbuf;
-	readpos += 0;
 
 	for (i = 0; i < num; i++) {
 		DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
