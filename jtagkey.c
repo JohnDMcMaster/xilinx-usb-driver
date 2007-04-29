@@ -79,6 +79,7 @@ static int jtagkey_set_bbmode(unsigned char mode) {
 
 	if (bitbang_mode != mode) {
 		DPRINTF("switching bitbang-mode!\n");
+
 		/* Wait for the latency-timer to kick in */
 		usleep(2);
 		if ((ret = ftdi_set_bitmode(&ftdic, JTAGKEY_TCK|JTAGKEY_TDI|JTAGKEY_TMS|JTAGKEY_OEn, mode))  != 0) {
@@ -236,6 +237,10 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 	if (nread)
 	{
 		DPRINTF("writing %d bytes\n", writepos-writebuf);
+
+		*writepos = last_data;
+		writepos++;
+
 		jtagkey_set_bbmode(BITMODE_SYNCBB);
 		ftdi_write_data(&ftdic, writebuf, writepos-writebuf);
 
@@ -276,6 +281,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 			switch(tr[i].cmdTrans) {
 				case PP_READ:
 					data = *readpos;
+
 #ifdef DEBUG
 					DPRINTF("READ: 0x%x\n", data);
 					jtagkey_state(data);
