@@ -7,6 +7,7 @@
 #include "jtagkey.h"
 
 #define USBBUFSIZE 1048576
+#define JTAG_SPEED 100000
 #define SLOW_AND_SAFE 1
 
 static struct ftdi_context ftdic;
@@ -51,16 +52,16 @@ static int jtagkey_init(unsigned short vid, unsigned short pid) {
 		return ret;
 	}
 
-	if ((ret = ftdi_set_baudrate(&ftdic, 500000))  != 0) {
-		fprintf(stderr, "unable to set baudrate: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
-		return ret;
-	}
-
 	c = 0x00;
 	ftdi_write_data(&ftdic, &c, 1);
 
 	if ((ret = ftdi_set_bitmode(&ftdic, JTAGKEY_TCK|JTAGKEY_TDI|JTAGKEY_TMS|JTAGKEY_OEn, BITMODE_SYNCBB))  != 0) {
 		fprintf(stderr, "unable to enable bitbang mode: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
+		return ret;
+	}
+
+	if ((ret = ftdi_set_baudrate(&ftdic, JTAG_SPEED))  != 0) {
+		fprintf(stderr, "unable to set baudrate: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
 
