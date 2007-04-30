@@ -6,6 +6,7 @@
 #include "jtagkey.h"
 
 #define USBBUFSIZE 4096
+#define SLOW_AND_SAFE 1
 
 static struct ftdi_context ftdic;
 static unsigned int usb_maxlen = 0;
@@ -36,10 +37,14 @@ static int jtagkey_init(unsigned short vid, unsigned short pid) {
 	}
 
 
+#ifdef SLOW_AND_SAFE
+	usb_maxlen = 384;
+#else
 	if ((ret = ftdi_write_data_get_chunksize(&ftdic, &usb_maxlen))  != 0) {
 		fprintf(stderr, "unable to get write chunksize: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
+#endif
 
 	if ((ret = ftdi_set_latency_timer(&ftdic, 1))  != 0) {
 		fprintf(stderr, "unable to set latency timer: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
@@ -54,12 +59,12 @@ static int jtagkey_init(unsigned short vid, unsigned short pid) {
 	c = 0x00;
 	ftdi_write_data(&ftdic, &c, 1);
 
-	if ((ret = ftdi_set_bitmode(&ftdic, JTAGKEY_TCK|JTAGKEY_TDI|JTAGKEY_TMS|JTAGKEY_OEn, BITMODE_BITBANG))  != 0) {
+	if ((ret = ftdi_set_bitmode(&ftdic, JTAGKEY_TCK|JTAGKEY_TDI|JTAGKEY_TMS|JTAGKEY_OEn, BITMODE_SYNCBB))  != 0) {
 		fprintf(stderr, "unable to enable bitbang mode: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
 
-	bitbang_mode = BITMODE_BITBANG;
+	bitbang_mode = BITMODE_SYNCBB;
 
 	if ((ret = ftdi_usb_purge_buffers(&ftdic))  != 0) {
 		fprintf(stderr, "unable to purge buffers: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
@@ -157,7 +162,9 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		int len;
 		DPRINTF("writing %d bytes due to %d following reads in %d chunks or full buffer\n", writepos-writebuf, nread, num);
 
+#ifndef SLOW_AND_SAFE
 		jtagkey_set_bbmode(BITMODE_BITBANG);
+#endif
 		while (pos < writepos) {
 			len = writepos-pos;
 
@@ -166,6 +173,12 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 
 			DPRINTF("combined write of %d/%d\n",len,writepos-pos);
 			ftdi_write_data(&ftdic, pos, len);
+#ifdef SLOW_AND_SAFE
+			i = 0;
+			while (i < len) {
+				i += ftdi_read_data(&ftdic, readbuf, sizeof(readbuf));
+			}
+#endif
 			pos += len;
 		}
 
