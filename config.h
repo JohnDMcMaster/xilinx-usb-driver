@@ -4,6 +4,7 @@ struct parport_config {
 	unsigned char real;
 	unsigned short usb_vid;
 	unsigned short usb_pid;
+	/* TODO: function pointer */
 };
 
 unsigned char config_is_real_pport(int num);

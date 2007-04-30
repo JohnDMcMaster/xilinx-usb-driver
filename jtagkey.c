@@ -2,6 +2,7 @@
 #include <ftdi.h>
 #include <unistd.h>
 #include "usb-driver.h"
+#include "config.h"
 #include "jtagkey.h"
 
 #define USBBUFSIZE 4096
@@ -10,7 +11,7 @@ static struct ftdi_context ftdic;
 static unsigned int usb_maxlen = 0;
 static unsigned char bitbang_mode;
 
-int jtagkey_init(unsigned short vid, unsigned short pid) {
+static int jtagkey_init(unsigned short vid, unsigned short pid) {
 	int ret = 0;
 	unsigned char c;
 
@@ -68,10 +69,23 @@ int jtagkey_init(unsigned short vid, unsigned short pid) {
 	return ret;
 }
 
-void jtagkey_close() {
-	ftdi_disable_bitbang(&ftdic);
-	ftdi_usb_close(&ftdic);
-	ftdi_deinit(&ftdic);
+int jtagkey_open(int num) {
+	int ret;
+
+	ret = jtagkey_init(config_usb_vid(num), config_usb_pid(num));
+
+	if (ret >= 0)
+		ret = 0xff;
+
+	return ret;
+}
+
+void jtagkey_close(int handle) {
+	if (handle == 0xff) {
+		ftdi_disable_bitbang(&ftdic);
+		ftdi_usb_close(&ftdic);
+		ftdi_deinit(&ftdic);
+	}
 }
 
 static int jtagkey_set_bbmode(unsigned char mode) {

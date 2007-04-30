@@ -5,6 +5,6 @@
 #define JTAGKEY_VREF	0x20
 #define JTAGKEY_OEn	0x10
 
-int jtagkey_init(unsigned short vid, unsigned short pid);
-void jtagkey_close();
 int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, int ecpbase, int num);
+int jtagkey_open(int num);
+void jtagkey_close(int handle);

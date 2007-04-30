@@ -39,17 +39,15 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <sys/ioctl.h>
-#include <linux/parport.h>
-#include <linux/ppdev.h>
 #include "usb-driver.h"
 #include "config.h"
+#include "parport.h"
 #ifdef JTAGKEY
 #include "jtagkey.h"
 #endif
 
 static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = -1;
-static int parportfd = -1;
 static unsigned long ppbase = 0;
 static unsigned long ecpbase = 0;
 FILE *modulesfp = NULL;
@@ -237,106 +235,6 @@ int usb_deviceinfo(unsigned char *buf) {
 	return len;
 }
 
-int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request) {
-	int ret = 0;
-	unsigned long port = (unsigned long)tr->dwPort;
-	unsigned char val;
-	static unsigned char last_pp_write = 0;
-
-	DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
-			(unsigned long)tr->dwPort, tr->cmdTrans, tr->dwBytes,
-			tr->fAutoinc, tr->dwOptions);
-
-	val = tr->Data.Byte;
-	
-#ifdef DEBUG
-	if (tr->cmdTrans == 13)
-		DPRINTF("write byte: %d\n", val);
-#endif
-
-	if (parportfd < 0)
-		return ret;
-
-	if (port == ppbase + PP_DATA) {
-		DPRINTF("data port\n");
-		switch(tr->cmdTrans) {
-			case PP_READ:
-				ret = 0; /* We don't support reading of the data port */
-				break;
-
-			case PP_WRITE:
-				ret = ioctl(parportfd, PPWDATA, &val);
-				last_pp_write = val;
-				break;
-
-			default:
-				fprintf(stderr,"!!!Unsupported TRANSFER command: %lu!!!\n", tr->cmdTrans);
-				ret = -1;
-				break;
-		}
-	} else if (port == ppbase + PP_STATUS) {
-		DPRINTF("status port (last write: %d)\n", last_pp_write);
-		switch(tr->cmdTrans) {
-			case PP_READ:
-				ret = ioctl(parportfd, PPRSTATUS, &val);
-#ifdef FORCE_PC3_IDENT
-				val &= 0x5f;
-				if (last_pp_write & 0x40)
-					val |= 0x20;
-				else
-					val |= 0x80;
-#endif
-				break;
-
-			case PP_WRITE:
-				ret = 0; /* Status Port is readonly */
-				break;
-
-			default:
-				fprintf(stderr,"!!!Unsupported TRANSFER command: %lu!!!\n", tr->cmdTrans);
-				ret = -1;
-				break;
-		}
-	} else if (port == ppbase + PP_CONTROL) {
-		DPRINTF("control port\n");
-		switch(tr->cmdTrans) {
-			case PP_READ:
-				ret = ioctl(parportfd, PPRCONTROL, &val);
-				break;
-
-			case PP_WRITE:
-				ret = ioctl(parportfd, PPWCONTROL, &val);
-				break;
-
-			default:
-				fprintf(stderr,"!!!Unsupported TRANSFER command: %lu!!!\n", tr->cmdTrans);
-				ret = -1;
-				break;
-		}
-	} else if ((port == ecpbase + PP_ECP_CFGA) && ecpbase) {
-		DPRINTF("ECP_CFGA port\n");
-	} else if ((port == ecpbase + PP_ECP_CFGB) && ecpbase) {
-		DPRINTF("ECP_CFGB port\n");
-	} else if ((port == ecpbase + PP_ECP_ECR) && ecpbase) {
-		DPRINTF("ECP_ECR port\n");
-	} else {
-		DPRINTF("access to unsupported address range!\n");
-		ret = 0;
-	}
-
-	tr->Data.Byte = val;
-
-	DPRINTF("dwPortReturn: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
-			(unsigned long)tr->dwPort, tr->cmdTrans, tr->dwBytes,
-			tr->fAutoinc, tr->dwOptions);
-#ifdef DEBUG
-	if (tr->cmdTrans == 10)
-		DPRINTF("read byte: %d\n", tr->Data.Byte);
-#endif
-
-	return ret;
-}
-
 int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	struct header_struct* wdheader = (struct header_struct*)wdioctl;
 	struct version_struct *version;
@@ -350,7 +248,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
-			strcpy(version->version, "libusb-driver.so $Revision: 1.66 $");
+			strcpy(version->version, "libusb-driver.so $Revision: 1.67 $");
 			version->versionul = 802;
 			DPRINTF("VERSION\n");
 			break;
@@ -364,7 +262,6 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			DPRINTF("CARD_REGISTER\n");
 			{
 				struct card_register* cr = (struct card_register*)(wdheader->data);
-				char ppdev[32];
 
 				DPRINTF("Items: %lu, Addr: 0x%lx, bytes: %lu, bar: %lu\n",
 				cr->Card.dwItems,
@@ -380,64 +277,24 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				
+
 #ifdef JTAGKEY
-				if (!config_is_real_pport((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10)) {
-					int num = (unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10;
-
-					ret=jtagkey_init(config_usb_vid(num), config_usb_pid(num));
-					cr->hCard = 0xff;
-					ppbase = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;
-					if (ret < 0)
-						cr->hCard = 0;
-
-					break;
-				}
+				if (!config_is_real_pport((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10))
+					ret = jtagkey_open((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
+				else
 #endif
-
-				if (parportfd < 0) {
-					snprintf(ppdev, sizeof(ppdev), "/dev/parport%lu",
-							(unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
-					DPRINTF("opening %s\n", ppdev);
-					parportfd = open(ppdev, O_RDWR|O_EXCL);
-
-					if (parportfd < 0)
-						fprintf(stderr,"Can't open %s: %s\n", ppdev, strerror(errno));
-				}
-
-				if (parportfd >= 0) {
-					int pmode;
-
-					if (ioctl(parportfd, PPCLAIM) == -1)
-						return ret;
-
-					ecpbase = 0;
-					pmode = IEEE1284_MODE_COMPAT;
-					if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
-						return ret;
-
-					if (cr->Card.dwItems > 1 && cr->Card.Item[1].I.IO.dwAddr) {
-						DPRINTF("ECP mode requested\n");
-						ecpbase = (unsigned long)cr->Card.Item[1].I.IO.dwAddr;
-						/* TODO: Implement ECP mode */
-#if 0
-						pmode = IEEE1284_MODE_ECP;
-
-						if (ioctl(parportfd, PPNEGOT, &pmode) == -1) {
-							ecpbase = 0;
-							pmode = IEEE1284_MODE_COMPAT;
-							if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
-								return ret;
-						}
-#endif
-					}
-
-					cr->hCard = parportfd;
-				}
+					ret = parport_open((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
 
 				ppbase = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;
-				if (ret < 0)
+
+				if (cr->Card.dwItems > 1 && cr->Card.Item[1].I.IO.dwAddr)
+					ecpbase = (unsigned long)cr->Card.Item[1].I.IO.dwAddr;
+
+				if (ret >= 0) {
+					cr->hCard = ret;
+				} else {
 					cr->hCard = 0;
+				}
 #endif
 				DPRINTF("hCard: %lu\n", cr->hCard);
 			}
@@ -716,7 +573,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					break;
 				}
 #endif /* JTAGKEY */
-				ret = pp_transfer(tr, fd, request);
+				ret = pp_transfer(tr, fd, request, ppbase, ecpbase, 1);
 #endif
 			}
 			break;
@@ -727,7 +584,6 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				WD_TRANSFER *tr = (WD_TRANSFER*)(wdheader->data);
 				unsigned long num = wdheader->size/sizeof(WD_TRANSFER);
-				int i;
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
@@ -735,14 +591,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifdef JTAGKEY
 				if (!config_is_real_pport(ppbase / 0x10)) {
 					ret = jtagkey_transfer(tr, fd, request, ppbase, ecpbase, num);
-					break;
-				}
+				} else
 #endif /* JTAGKEY */
-
-				for (i = 0; i < num; i++) {
-					DPRINTF("Transfer %d:\n", i+1);
-					ret = pp_transfer(tr + i, fd, request);
-				}
+					ret = pp_transfer(tr, fd, request, ppbase, ecpbase, num);
 #endif
 			}
 			break;
@@ -804,14 +655,10 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #else
 #ifdef JTAGKEY
 				if (cr->hCard == 0xff)
-					jtagkey_close();
+					jtagkey_close(cr->hCard);
+				else
 #endif
-
-				if (parportfd == cr->hCard && parportfd >= 0) {
-					ioctl(parportfd, PPRELEASE);
-					close(parportfd);
-					parportfd = -1;
-				}
+					parport_close(cr->hCard);
 #endif
 			}
 			break;

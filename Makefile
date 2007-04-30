@@ -12,11 +12,11 @@ SOBJECTS=libusb-driver.so libusb-driver-DEBUG.so
 
 all: $(SOBJECTS)
 
-libusb-driver.so: usb-driver.c jtagkey.c config.c usb-driver.h jtagkey.h config.h Makefile
-	gcc $(CFLAGS) usb-driver.c config.c $(JTAGKEYSRC) -o $@ -ldl -lusb -lpthread $(FTDI) -shared
+libusb-driver.so: usb-driver.c parport.c jtagkey.c config.c usb-driver.h parport.h jtagkey.h config.h Makefile
+	gcc $(CFLAGS) usb-driver.c parport.c config.c $(JTAGKEYSRC) -o $@ -ldl -lusb -lpthread $(FTDI) -shared
 
-libusb-driver-DEBUG.so: usb-driver.c jtagkey.c config.c usb-driver.h jtagkey.h config.h Makefile
-	gcc -DDEBUG $(CFLAGS) usb-driver.c config.c $(JTAGKEYSRC) -o $@ -ldl -lusb -lpthread $(FTDI) -shared
+libusb-driver-DEBUG.so: usb-driver.c parport.c jtagkey.c config.c usb-driver.h parport.h jtagkey.h config.h Makefile
+	gcc -DDEBUG $(CFLAGS) usb-driver.c parport.c config.c $(JTAGKEYSRC) -o $@ -ldl -lusb -lpthread $(FTDI) -shared
 
 clean:
 	rm -f $(SOBJECTS)
