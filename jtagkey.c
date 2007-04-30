@@ -1,15 +1,15 @@
 #include <stdio.h>
 #include <ftdi.h>
 #include <unistd.h>
+#include <pthread.h>
 #include "usb-driver.h"
 #include "config.h"
 #include "jtagkey.h"
 
-#define USBBUFSIZE 4096
+#define USBBUFSIZE 1048576
 #define SLOW_AND_SAFE 1
 
 static struct ftdi_context ftdic;
-static unsigned int usb_maxlen = 0;
 static unsigned char bitbang_mode;
 
 static int jtagkey_init(unsigned short vid, unsigned short pid) {
@@ -36,15 +36,15 @@ static int jtagkey_init(unsigned short vid, unsigned short pid) {
 		return ret;
 	}
 
-
-#ifdef SLOW_AND_SAFE
-	usb_maxlen = 384;
-#else
-	if ((ret = ftdi_write_data_get_chunksize(&ftdic, &usb_maxlen))  != 0) {
-		fprintf(stderr, "unable to get write chunksize: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
+	if ((ret = ftdi_write_data_set_chunksize(&ftdic, USBBUFSIZE))  != 0) {
+		fprintf(stderr, "unable to set write chunksize: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
-#endif
+
+	if ((ret = ftdi_read_data_set_chunksize(&ftdic, USBBUFSIZE))  != 0) {
+		fprintf(stderr, "unable to set read chunksize: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
+		return ret;
+	}
 
 	if ((ret = ftdi_set_latency_timer(&ftdic, 1))  != 0) {
 		fprintf(stderr, "unable to set latency timer: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
@@ -93,6 +93,7 @@ void jtagkey_close(int handle) {
 	}
 }
 
+#ifndef SLOW_AND_SAFE
 static int jtagkey_set_bbmode(unsigned char mode) {
 	int ret = 0;
 
@@ -117,6 +118,7 @@ static int jtagkey_set_bbmode(unsigned char mode) {
 
 	return ret;
 }
+#endif
 
 void jtagkey_state(unsigned char data) {
 	fprintf(stderr,"Pins high: ");
@@ -139,6 +141,25 @@ void jtagkey_state(unsigned char data) {
 	fprintf(stderr,"\n");
 }
 
+struct jtagkey_reader_arg {
+	int		num;
+	unsigned char	*buf;
+};
+
+static void *jtagkey_reader(void *thread_arg) {
+	struct jtagkey_reader_arg *arg = (struct jtagkey_reader_arg*)thread_arg;
+
+	int i;
+
+	i = 0;
+	DPRINTF("reader for %d bytes\n", arg->num);
+	while (i < arg->num) {
+		i += ftdi_read_data(&ftdic, arg->buf + i, arg->num - i);
+	}
+	
+	pthread_exit(NULL);
+}
+
 int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, int ecpbase, int num) {
 	int ret = 0;
 	int i;
@@ -150,6 +171,8 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 	static unsigned char writebuf[USBBUFSIZE], *writepos = writebuf;
 	static unsigned char readbuf[USBBUFSIZE], *readpos;
 	unsigned char data, prev_data;
+	struct jtagkey_reader_arg targ;
+	pthread_t reader_thread;
 
 	/* Count reads */
 	for (i = 0; i < num; i++)
@@ -160,27 +183,30 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 	if ((writepos-writebuf > sizeof(writebuf)-num) || (nread && writepos-writebuf)) {
 		unsigned char *pos = writebuf;
 		int len;
+
 		DPRINTF("writing %d bytes due to %d following reads in %d chunks or full buffer\n", writepos-writebuf, nread, num);
 
 #ifndef SLOW_AND_SAFE
 		jtagkey_set_bbmode(BITMODE_BITBANG);
 #endif
+#ifdef SLOW_AND_SAFE
+		targ.num = writepos-pos;
+		targ.buf = readbuf;
+		pthread_create(&reader_thread, NULL, &jtagkey_reader, &targ);
+#endif
 		while (pos < writepos) {
 			len = writepos-pos;
 
-			if (len > usb_maxlen)
-				len = usb_maxlen;
+			if (len > USBBUFSIZE)
+				len = USBBUFSIZE;
 
 			DPRINTF("combined write of %d/%d\n",len,writepos-pos);
 			ftdi_write_data(&ftdic, pos, len);
-#ifdef SLOW_AND_SAFE
-			i = 0;
-			while (i < len) {
-				i += ftdi_read_data(&ftdic, readbuf, sizeof(readbuf));
-			}
-#endif
 			pos += len;
 		}
+#ifdef SLOW_AND_SAFE
+		pthread_join(reader_thread, NULL);
+#endif
 
 		writepos = writebuf;
 	}
@@ -256,7 +282,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 			}
 		}
 
-		if (nread || (*writepos != prev_data))
+		if (nread || (*writepos != prev_data) || (i == num-1))
 			writepos++;
 	}
 
@@ -267,13 +293,14 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		*writepos = last_data;
 		writepos++;
 
+#ifndef SLOW_AND_SAFE
 		jtagkey_set_bbmode(BITMODE_SYNCBB);
+#endif
+		targ.num = writepos-writebuf;
+		targ.buf = readbuf;
+		pthread_create(&reader_thread, NULL, &jtagkey_reader, &targ);
 		ftdi_write_data(&ftdic, writebuf, writepos-writebuf);
-
-		i = 0;
-		while (i < writepos-writebuf) {
-			i += ftdi_read_data(&ftdic, readbuf, sizeof(readbuf));
-		}
+		pthread_join(reader_thread, NULL);
 
 #ifdef DEBUG
 		DPRINTF("write: ");
