@@ -41,15 +41,12 @@
 #include <sys/ioctl.h>
 #include "usb-driver.h"
 #include "config.h"
-#include "parport.h"
-#ifdef JTAGKEY
-#include "jtagkey.h"
-#endif
 
 static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = -1;
 static unsigned long ppbase = 0;
 static unsigned long ecpbase = 0;
+static struct parport_config *pport = NULL;
 FILE *modulesfp = NULL;
 FILE *baseaddrfp = NULL;
 int baseaddrnum = 0;
@@ -248,7 +245,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
-			strcpy(version->version, "libusb-driver.so $Revision: 1.67 $");
+			strcpy(version->version, "libusb-driver.so $Revision: 1.68 $");
 			version->versionul = 802;
 			DPRINTF("VERSION\n");
 			break;
@@ -278,12 +275,8 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
 
-#ifdef JTAGKEY
-				if (!config_is_real_pport((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10))
-					ret = jtagkey_open((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
-				else
-#endif
-					ret = parport_open((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
+				pport = config_get((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
+				ret = pport->open((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
 
 				ppbase = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;
 
@@ -566,14 +559,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-
-#ifdef JTAGKEY
-				if (!config_is_real_pport(ppbase / 0x10)) {
-					ret = jtagkey_transfer(tr, fd, request, ppbase, ecpbase, 1);
-					break;
-				}
-#endif /* JTAGKEY */
-				ret = pp_transfer(tr, fd, request, ppbase, ecpbase, 1);
+				ret = pport->transfer(tr, fd, request, ppbase, ecpbase, 1);
 #endif
 			}
 			break;
@@ -587,13 +573,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-
-#ifdef JTAGKEY
-				if (!config_is_real_pport(ppbase / 0x10)) {
-					ret = jtagkey_transfer(tr, fd, request, ppbase, ecpbase, num);
-				} else
-#endif /* JTAGKEY */
-					ret = pp_transfer(tr, fd, request, ppbase, ecpbase, num);
+				ret = pport->transfer(tr, fd, request, ppbase, ecpbase, num);
 #endif
 			}
 			break;
@@ -653,12 +633,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-#ifdef JTAGKEY
-				if (cr->hCard == 0xff)
-					jtagkey_close(cr->hCard);
-				else
-#endif
-					parport_close(cr->hCard);
+				pport->close(cr->hCard);
 #endif
 			}
 			break;

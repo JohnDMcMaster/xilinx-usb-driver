@@ -13,7 +13,7 @@
 
 static int parportfd = -1;
 
-int pp_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, int ecpbase, int num) {
+int parport_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, int ecpbase, int num) {
 	int ret = 0;
 	int i;
 	unsigned long port;
