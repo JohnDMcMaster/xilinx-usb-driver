@@ -73,3 +73,8 @@ unsigned short config_usb_pid(int num) {
 
 	return ret;
 }
+
+/* TODO:
+int config_init_port(int num) {}
+config_get_transfer_fn(int num) {}
+*/
