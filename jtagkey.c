@@ -8,10 +8,27 @@
 
 #define USBBUFSIZE 1048576
 #define JTAG_SPEED 100000
-#define SLOW_AND_SAFE 1
+#define BULK_LATENCY 2
+#define OTHER_LATENCY 1
 
 static struct ftdi_context ftdic;
-static unsigned char bitbang_mode;
+
+static int jtagkey_latency(int latency) {
+	static int current = 0;
+	int ret;
+
+	if (current != latency) {
+		DPRINTF("switching latency\n");
+		if ((ret = ftdi_set_latency_timer(&ftdic, latency))  != 0) {
+			fprintf(stderr, "unable to set latency timer: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
+			return ret;
+		}
+		
+		current = latency;
+	}
+
+	return ret;
+}
 
 static int jtagkey_init(unsigned short vid, unsigned short pid) {
 	int ret = 0;
@@ -47,10 +64,8 @@ static int jtagkey_init(unsigned short vid, unsigned short pid) {
 		return ret;
 	}
 
-	if ((ret = ftdi_set_latency_timer(&ftdic, 1))  != 0) {
-		fprintf(stderr, "unable to set latency timer: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
+	if ((ret = jtagkey_latency(OTHER_LATENCY)) != 0)
 		return ret;
-	}
 
 	c = 0x00;
 	ftdi_write_data(&ftdic, &c, 1);
@@ -64,8 +79,6 @@ static int jtagkey_init(unsigned short vid, unsigned short pid) {
 		fprintf(stderr, "unable to set baudrate: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
-
-	bitbang_mode = BITMODE_SYNCBB;
 
 	if ((ret = ftdi_usb_purge_buffers(&ftdic))  != 0) {
 		fprintf(stderr, "unable to purge buffers: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
@@ -93,33 +106,6 @@ void jtagkey_close(int handle) {
 		ftdi_deinit(&ftdic);
 	}
 }
-
-#ifndef SLOW_AND_SAFE
-static int jtagkey_set_bbmode(unsigned char mode) {
-	int ret = 0;
-
-	if (bitbang_mode != mode) {
-		DPRINTF("switching bitbang-mode!\n");
-
-		/* Wait for the latency-timer to kick in */
-		usleep(2);
-		if ((ret = ftdi_set_bitmode(&ftdic, JTAGKEY_TCK|JTAGKEY_TDI|JTAGKEY_TMS|JTAGKEY_OEn, mode))  != 0) {
-			fprintf(stderr, "unable to enable bitbang mode: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
-			return ret;
-		}
-		if ((ret = ftdi_usb_purge_buffers(&ftdic))  != 0) {
-			fprintf(stderr, "unable to purge buffers: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
-			return ret;
-		}
-		/* Wait for the FTDI2232 to settle */
-		usleep(2);
-
-		bitbang_mode = mode;
-	}
-
-	return ret;
-}
-#endif
 
 void jtagkey_state(unsigned char data) {
 	fprintf(stderr,"Pins high: ");
@@ -149,7 +135,6 @@ struct jtagkey_reader_arg {
 
 static void *jtagkey_reader(void *thread_arg) {
 	struct jtagkey_reader_arg *arg = (struct jtagkey_reader_arg*)thread_arg;
-
 	int i;
 
 	i = 0;
@@ -187,15 +172,12 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		int len;
 
 		DPRINTF("writing %d bytes due to %d following reads in %d chunks or full buffer\n", writepos-writebuf, nread, num);
+		jtagkey_latency(BULK_LATENCY);
 
-#ifndef SLOW_AND_SAFE
-		jtagkey_set_bbmode(BITMODE_BITBANG);
-#endif
-#ifdef SLOW_AND_SAFE
 		targ.num = writepos-pos;
 		targ.buf = readbuf;
 		pthread_create(&reader_thread, NULL, &jtagkey_reader, &targ);
-#endif
+
 		while (pos < writepos) {
 			len = writepos-pos;
 
@@ -206,9 +188,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 			ftdi_write_data(&ftdic, pos, len);
 			pos += len;
 		}
-#ifdef SLOW_AND_SAFE
 		pthread_join(reader_thread, NULL);
-#endif
 
 		writepos = writebuf;
 	}
@@ -297,9 +277,8 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		*writepos = last_data;
 		writepos++;
 
-#ifndef SLOW_AND_SAFE
-		jtagkey_set_bbmode(BITMODE_SYNCBB);
-#endif
+		jtagkey_latency(OTHER_LATENCY);
+
 		targ.num = writepos-writebuf;
 		targ.buf = readbuf;
 		pthread_create(&reader_thread, NULL, &jtagkey_reader, &targ);
