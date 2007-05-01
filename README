@@ -124,5 +124,5 @@ To set-up the device:
    ACTION=="add", BUS=="usb", SYSFS{idVendor}=="0403", SYSFS{idProduct}=="cff8", MODE="666"
    (replace the vendor and product id with your values)
 
-The support for FTDI 2232 based devices is currently experimental and they are
-currently significantly slowen than the other supported cables.
+The support for FTDI 2232 based devices is experimental and they are currently
+significantly slowen than the other supported cables.
