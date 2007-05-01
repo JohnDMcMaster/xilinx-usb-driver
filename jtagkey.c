@@ -5,6 +5,7 @@
 #include "usb-driver.h"
 #include "config.h"
 #include "jtagkey.h"
+#include "jtagmon.h"
 
 #define USBBUFSIZE 1048576
 #define JTAG_SPEED 100000
@@ -206,6 +207,9 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 #ifdef DEBUG
 		if (tr[i].cmdTrans == 13)
 			DPRINTF("write byte: %d\n", val);
+
+		if (tr[i].cmdTrans == 13)
+			tapmon(val & PP_TCK, val & PP_TMS);
 #endif
 
 		/* Pad writebuf for read-commands in stream */
