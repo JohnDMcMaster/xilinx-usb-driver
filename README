@@ -125,4 +125,4 @@ To set-up the device:
    (replace the vendor and product id with your values)
 
 The support for FTDI 2232 based devices is experimental and they are currently
-significantly slowen than the other supported cables.
+significantly slower than the other supported cables.
