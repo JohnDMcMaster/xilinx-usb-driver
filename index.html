@@ -23,6 +23,10 @@
 		The USB cable is supported at full speed.
 		</P>
 		<P>
+		Experimental support for FTDI 2232 based devices has been added. They are seen by Impact as a Parallel
+		Cable III. These devices are currently significantly slower than every other supported cable.
+		</P>
+		<P>
 		The library is called <i>libusb-driver</i> as it was developed to support the USB cable, but later
 		extended to also support parallel cables.
 		</P>
@@ -36,12 +40,14 @@
 			<li><a href="http://www.enterpoint.co.uk/">Enterpoint Prog2</a> Parallel Cable III clone</li>
 			<li><a href="http://www.trenz-electronic.de/">Trenz TE0149-01</a> Parallel Cable III clone</li>
 			<li><a href="http://www.digilentinc.com/Products/Catalog.cfm?Nav1=Products&amp;Nav2=Cables&amp;Cat=Cable">Digilent JTAG3</a> Parallel Cable III clone</li>
+			<li><a href="http://www.amontec.com/">Amontec JTAGkey-Tiny</a> (experimental)</li>
 		</ul>
 		These cables should work but have not yet been tested:
 		<ul>
 			<li>XILINX Platform Cable USB DLC9 and DLC9G</li>
 			<li>Integrated Platform Cable USB on other development boards</li>
 			<li>other Parallel Cable III clones</li>
+			<li>other FTDI2232 based devices which use the chips standard JTAG pinout (experimental)</li>
 		</ul>
 		<H2>Supported Software</H2>
 		The following software is reported to work with this driver:
@@ -74,6 +80,6 @@
 			<li><a href="http://www.rogerstech.co.uk/xc3sprog/">Spartan3 JTAG download tools for GNU/Linux (xc3sprog)</a></li>
 		</ul>
 		<HR>
-		<FONT SIZE="-1"><I><A HREF="mailto:cabledriver@zerfleddert.de">Michael Gernoth</A>, $Id: index.html,v 1.12 2007-04-22 11:41:58 michael Exp $</I></FONT>
+		<FONT SIZE="-1"><I><A HREF="mailto:cabledriver@zerfleddert.de">Michael Gernoth</A>, $Id: index.html,v 1.13 2007-05-01 12:03:15 michael Exp $</I></FONT>
 	</BODY>
 </HTML>

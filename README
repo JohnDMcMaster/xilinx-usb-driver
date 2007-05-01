@@ -20,6 +20,10 @@ the following software:
  * EDK 8.2.02i
  * EDK 8.1.02i
 
+In addition to the XILINX USB and parallel cables, devices based on the FTDI
+2232 serial converter chip are also experimentally supported. This includes
+devices like the Amontec JTAGkey(-Tiny).
+
 Build the library by calling `make'.
 
 To use this library you have to preload the library before starting impact:
@@ -93,6 +97,32 @@ HIGHZ instead of BYPASS" enabled in Edit -> Preferences -> iMPACT Configuration
 Preferences.
 If you are using batch mode, add the following line to your cmd file:
 setPreference -pref UseHighz:TRUE
-(This problem also occurs on windows and when using the real windrvr in linux and
-is solved with the same workaround. Impact 8.2 is working fine with the same
+(This problem also occurs on windows and when using the real windrvr in linux
+and is solved with the same workaround. Impact 8.2 is working fine with the same
 boards and designs)
+
+
+Notes for FTDI 2232 based cables
+================================
+
+To build the driver with FTDI 2232 support, you need to have libftdi and
+the libftdi development package installed. On debian, you can install both
+by installing 'libftdi-dev'.
+
+To set-up the device:
+1. Find out the vendor and product id of your cable using lsusb:
+   Bus 003 Device 005: ID 0403:cff8 Future Technology Devices ...
+                          ~~~~~~~~~
+
+2. Copy the sample libusb-driverrc to ~/.libusb-driverrc, edit it and replace
+   the vendor and product-id in the example file with the values from provided
+   in the lsusb-output. You can also change the 'parallel port' which is mapped
+   to this cable. Impact sees the device at that port as a Parallel Cable III.
+
+3. To use the device as an ordinary user, put the following line in a new file
+   in /etc/udev/rules.d/ and restart udev:
+   ACTION=="add", BUS=="usb", SYSFS{idVendor}=="0403", SYSFS{idProduct}=="cff8", MODE="666"
+   (replace the vendor and product id with your values)
+
+The support for FTDI 2232 based devices is currently experimental and they are
+currently significantly slowen than the other supported cables.
