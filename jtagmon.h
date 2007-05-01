@@ -1,1 +1,1 @@
-void tapmon(unsigned char tck, unsigned char tms);
+void jtagmon(unsigned char tck, unsigned char tms, unsigned char tdi);

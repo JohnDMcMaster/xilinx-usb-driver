@@ -21,8 +21,9 @@ enum tap_states {
 	UPDATE_IR
 };
 
-void tapmon(unsigned char tck, unsigned char tms) {
+void jtagmon(unsigned char tck, unsigned char tms, unsigned char tdi) {
 	static unsigned char last_tck = 1;
+	static char tdi_written = 0;
 	static int state = TEST_LOGIC_RESET;
 	static char state_text[32] = "Test Logic Reset";
 	char last_state_text[32];
@@ -198,7 +199,14 @@ void tapmon(unsigned char tck, unsigned char tms) {
 		}
 
 		if (last_state != state) {
+			if (tdi_written)
+				fprintf(stderr,"\n");
+
 			fprintf(stderr,"TAP state transition from %s to %s\n", last_state_text, state_text);
+			tdi_written = 0;
+		} else {
+			fprintf(stderr,"%d",(tdi ? 1 : 0));
+			tdi_written = 1;
 		}
 	}
 

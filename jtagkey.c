@@ -209,7 +209,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 			DPRINTF("write byte: %d\n", val);
 
 		if (tr[i].cmdTrans == 13)
-			tapmon(val & PP_TCK, val & PP_TMS);
+			jtagmon(val & PP_TCK, val & PP_TMS, val & PP_TDI);
 #endif
 
 		/* Pad writebuf for read-commands in stream */
