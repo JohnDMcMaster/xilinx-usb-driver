@@ -161,6 +161,7 @@ static void *jtagkey_reader(void *thread_arg) {
 	pthread_exit(NULL);
 }
 
+/* TODO: Interpret JTAG commands and transfer in MPSSE mode */
 int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, int ecpbase, int num) {
 	int ret = 0;
 	int i;
@@ -171,7 +172,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 	static unsigned char last_write = 0x00;
 	static unsigned char writebuf[USBBUFSIZE], *writepos = writebuf;
 	static unsigned char readbuf[USBBUFSIZE], *readpos;
-	unsigned char data, prev_data;
+	unsigned char data, prev_data, last_cyc_write;
 	struct jtagkey_reader_arg targ;
 	pthread_t reader_thread;
 
@@ -211,6 +212,8 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 
 		writepos = writebuf;
 	}
+
+	last_cyc_write = last_write;
 
 	for (i = 0; i < num; i++) {
 		DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
@@ -283,7 +286,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 			}
 		}
 
-		if (nread || (*writepos != prev_data) || (i == num-1))
+		if ((tr[i].cmdTrans == PP_READ) || (*writepos != prev_data) || (i == num-1))
 			writepos++;
 	}
 
@@ -316,6 +319,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 	}
 
 	readpos = readbuf;
+	last_write = last_cyc_write;
 
 	for (i = 0; i < num; i++) {
 		DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
@@ -324,6 +328,10 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 
 		port = (unsigned long)tr[i].dwPort;
 		val = tr[i].Data.Byte;
+
+		if ((tr[i].cmdTrans != PP_READ) && (val == last_write) && (i != num-1))
+			continue;
+
 		readpos++;
 
 		if (port == ppbase + PP_DATA) {
@@ -345,7 +353,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 					if ((data & JTAGKEY_TDO) && (last_write & PP_PROG))
 						val |= PP_TDO;
 
-					if (!(last_write & PP_PROG))
+					if (~last_write & PP_PROG)
 						val |= 0x08;
 
 					if (last_write & 0x40)
