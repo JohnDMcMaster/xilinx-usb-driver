@@ -17,11 +17,14 @@ static struct parport_config pp_config[4];
 
 static void read_config() {
 	int i;
-	int line, len, num;
 	static int config_read = 0;
 	FILE *cfg;
-	char buf[LINELEN], *pbuf;
+	char buf[LINELEN];
+#ifdef JTAGKEY
+	char *pbuf;
 	unsigned short vid, pid;
+	int line, len, num;
+#endif
 
 	if (config_read)
 		return;
