@@ -245,7 +245,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	switch(request & ~(0xc0000000)) {
 		case VERSION:
 			version = (struct version_struct*)(wdheader->data);
-			strcpy(version->version, "libusb-driver.so $Revision: 1.68 $");
+			strcpy(version->version, "libusb-driver.so $Revision: 1.69 $");
 			version->versionul = 802;
 			DPRINTF("VERSION\n");
 			break;
@@ -276,6 +276,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #else
 
 				pport = config_get((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
+				if (!pport)
+					break;
+
 				ret = pport->open((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
 
 				ppbase = (unsigned long)cr->Card.Item[0].I.IO.dwAddr;

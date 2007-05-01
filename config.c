@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <string.h>
 #include "usb-driver.h"
 #include "parport.h"
 #ifdef JTAGKEY
@@ -8,11 +9,19 @@
 #endif
 #include "config.h"
 
+#define LINELEN 1024
+
+#define PARSEERROR fprintf(stderr,"LIBUSB-DRIVER WARNING: Invalid config statement at line %d\n", line)
+
 static struct parport_config pp_config[4];
 
 static void read_config() {
 	int i;
+	int line, len, num;
 	static int config_read = 0;
+	FILE *cfg;
+	char buf[LINELEN], *pbuf;
+	unsigned short vid, pid;
 
 	if (config_read)
 		return;
@@ -28,14 +37,144 @@ static void read_config() {
 		pp_config[i].transfer = parport_transfer;
 	}
 
+	snprintf(buf, sizeof(buf), "%s/.libusb-driverrc", getenv("HOME"));
+
+	cfg = fopen(buf, "r");
+	if (cfg) {
 #ifdef JTAGKEY
-	pp_config[3].real = 0;
-	pp_config[3].usb_vid = 0x0403;
-	pp_config[3].usb_pid = 0xcff8;
-	pp_config[3].open = jtagkey_open;
-	pp_config[3].close = jtagkey_close;
-	pp_config[3].transfer = jtagkey_transfer;
+		line = 0;
+		do {
+			pbuf = fgets(buf, sizeof(buf), cfg);
+			if (!pbuf)
+				break;
+
+			line++;
+
+			len = strlen(buf);
+
+			if (len > 0 && buf[len-1] == '\n') {
+				buf[len-1] = '\0';
+				len--;
+			}
+			if (len > 0 && buf[len-1] == '\r') {
+				buf[len-1] = '\0';
+				len--;
+			}
+			
+			for (i = 0; i < len; i++) {
+				if (buf[i] != ' ' && buf[i] != '\t')
+					break;
+			}
+
+			if (buf[i] == '#' || buf[i] == ';' || buf[i] == '\0')
+				continue;
+
+			if (!strncasecmp(buf+i, "LPT", 3)) {
+				unsigned char equal_seen = 0;
+
+				i += 3;
+				pbuf = buf+i;
+				for (; i < len; i++) {
+					if (buf[i] == ' ' || buf[i] == '\t' || buf[i] == '=') {
+						if (buf[i] == '=')
+							equal_seen = 1;
+
+						buf[i] = '\0';
+						i++;
+						break;
+					}
+				}
+
+				if (*pbuf == '\0') {
+					PARSEERROR;
+					continue;
+				}
+
+				num = 0;
+				num = strtol(pbuf, NULL, 10);
+				if (num < 1) {
+					PARSEERROR;
+					continue;
+				}
+				num--;
+
+				for (; (i < len) && (!equal_seen) ; i++) {
+					if (buf[i] == '=') {
+						equal_seen = 1;
+						i++;
+						break;
+					} else if (buf[i] != ' ' && buf[i] != '\t') {
+						break;
+					}
+				}
+
+				if (!equal_seen) {
+					PARSEERROR;
+					continue;
+				}
+
+				for (; i < len; i++) {
+					if (buf[i] != ' ' && buf[i] != '\t')
+						break;
+				}
+
+				if (strncasecmp(buf+i, "FTDI:", 5)) {
+					PARSEERROR;
+					continue;
+				}
+
+				i += 5;
+				pbuf = buf + i;
+
+				for (; i < len; i++) {
+					if (buf[i] == ':')
+						break;
+				}
+
+				if (buf[i] != ':') {
+					PARSEERROR;
+					continue;
+				}
+
+				buf[i] = '\0';
+
+				vid = 0;
+				vid = strtol(pbuf, NULL, 16);
+				if (!num) {
+					PARSEERROR;
+					continue;
+				}
+
+				i++;
+				pbuf = buf + i;
+
+				for (; i < len; i++) {
+					if (buf[i] == ' ' || buf[i] == '\t')
+						break;
+				}
+
+				pid = 0;
+				pid = strtol(pbuf, NULL, 16);
+				if (!num) {
+					PARSEERROR;
+					continue;
+				}
+
+				pp_config[num].real = 0;
+				pp_config[num].usb_vid = vid;
+				pp_config[num].usb_pid = pid;
+				pp_config[num].open = jtagkey_open;
+				pp_config[num].close = jtagkey_close;
+				pp_config[num].transfer = jtagkey_transfer;
+			} else {
+				PARSEERROR;
+			}
+		} while (pbuf);
+#else
+		fprintf(stderr,"libusb-driver not compiled with FTDI2232-support, config file ignored!\n");
 #endif
+		fclose(cfg);
+	}
 }
 
 struct parport_config *config_get(int num) {

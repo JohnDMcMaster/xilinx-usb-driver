@@ -1,0 +1,6 @@
+# Copy this file to ~/.libusb-driverrc if you want to use FTDI2232 cables
+# All parallel ports not defined in this file are mapped to real ports on the
+# system
+
+# Amontec Jtagkey
+LPT2 = FTDI:0403:cff8
