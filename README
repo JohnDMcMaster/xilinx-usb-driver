@@ -115,9 +115,9 @@ To set-up the device:
                           ~~~~~~~~~
 
 2. Copy the sample libusb-driverrc to ~/.libusb-driverrc, edit it and replace
-   the vendor and product-id in the example file with the values from provided
-   in the lsusb-output. You can also change the 'parallel port' which is mapped
-   to this cable. Impact sees the device at that port as a Parallel Cable III.
+   the vendor and product-id in the example file with the values provided in
+   the lsusb-output. You can also change the 'parallel port' which is mapped to
+   this cable. Impact sees the device at that port as a Parallel Cable III.
 
 3. To use the device as an ordinary user, put the following line in a new file
    in /etc/udev/rules.d/ and restart udev:
