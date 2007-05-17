@@ -40,6 +40,9 @@ http://git.zerfleddert.de/cgi-bin/gitweb.cgi/usb-driver
 The main website is located at:
 http://www.rmdir.de/~michael/xilinx/
 
+The Git repository can be cloned with:
+git clone git://git.zerfleddert.de/usb-driver
+
 
 Notes for the USB cable
 =======================
