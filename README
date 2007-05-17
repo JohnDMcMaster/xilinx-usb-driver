@@ -35,7 +35,7 @@ $ setenv LD_PRELOAD /path/to/libusb-driver.so  (for csh shells)
 $ impact
 
 The source for this library can be found at:
-http://cvs.zerfleddert.de/cgi-bin/viewcvs.cgi/usb-driver/
+http://git.zerfleddert.de/cgi-bin/gitweb.cgi/usb-driver
 
 The main website is located at:
 http://www.rmdir.de/~michael/xilinx/
