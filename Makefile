@@ -1,6 +1,6 @@
 #Add -DFORCE_PC3_IDENT to CFLAGS to force the identification of
 #a Parallel Cable III
-CFLAGS=-Wall -fPIC #-DFORCE_PC3_IDENT
+CFLAGS=-Wall -fPIC -DUSB_DRIVER_VERSION="\"$(shell stat -c '%y' usb-driver.c |cut -d\. -f1)\"" #-DFORCE_PC3_IDENT
 
 FTDI := $(shell libftdi-config --libs 2>/dev/null)
 ifneq ($(FTDI),)
