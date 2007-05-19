@@ -891,10 +891,7 @@ int access(const char *pathname, int mode) {
 	if (!func)
 		func = (int (*) (const char*, int)) dlsym(RTLD_NEXT, "access");
 
-	if (!pathname)
-		return -1;
-	
-	if (!strcmp(pathname, "/dev/windrvr6")) {
+	if (pathname && !strcmp(pathname, "/dev/windrvr6")) {
 		return 0;
 	} else {
 		return (*func)(pathname, mode);
