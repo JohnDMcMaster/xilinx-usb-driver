@@ -17,6 +17,7 @@ the following software:
  * ChipScope 9.1.03i
  * ChipScope 9.1.02i
  * ChipScope 8.2.04i
+ * EDK 9.1.02i
  * EDK 9.1.01i
  * EDK 8.2.02i
  * EDK 8.1.02i
@@ -25,7 +26,8 @@ In addition to the XILINX USB and parallel cables, devices based on the FTDI
 2232 serial converter chip are also experimentally supported. This includes
 devices like the Amontec JTAGkey(-Tiny).
 
-Build the library by calling `make'.
+Build the library by calling `make'. If you are on a 64 bit system but want
+to build a 32 bit library, run `make lib32' instead.
 
 To use this library you have to preload the library before starting impact:
 
