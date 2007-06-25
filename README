@@ -133,3 +133,12 @@ To set-up the device:
 
 The support for FTDI 2232 based devices is experimental and they are currently
 significantly slower than the other supported cables.
+
+
+Locked cables
+=============
+
+If you get the message 'The cable is being used by another application.' from
+impact, try running the following command:
+
+echo -e 'cleancablelock\nexit' | impact -batch
