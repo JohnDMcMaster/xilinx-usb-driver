@@ -636,7 +636,10 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				pport->close(cr->hCard);
+				if (pport)
+					pport->close(cr->hCard);
+
+				pport = NULL;
 #endif
 			}
 			break;
