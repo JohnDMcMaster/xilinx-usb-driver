@@ -2,6 +2,7 @@
 #include <ftdi.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <inttypes.h>
 #include "usb-driver.h"
 #include "config.h"
 #include "jtagkey.h"
