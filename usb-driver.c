@@ -466,6 +466,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct event *e = (struct event*)(wdheader->data);
 				struct usb_bus *bus;
+				char* device_num;
+				char* remainder;
+				int devnum = -1;
 				int i;
 
 				DPRINTF("handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n",
@@ -476,6 +479,15 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				e->u.Usb.deviceId.dwProductId,
 				e->u.Usb.dwUniqueID, e->dwEventVer,
 				e->dwNumMatchTables);
+
+				device_num=getenv("XILINX_USB_DEVNUM");
+				if (device_num!=NULL) {
+					DPRINTF("XILINX_USB_BUS=%s\n",device_num);
+					devnum=strtol(device_num,&remainder,10);
+					if (device_num==remainder) /* no integer in env variable */
+						devnum=-1;
+				}
+
 
 				for (i = 0; i < e->dwNumMatchTables; i++) {
 
@@ -497,7 +509,8 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 							if((desc->idVendor == e->matchTables[i].VendorId) &&
 							   (desc->idProduct == e->matchTables[i].ProductId) &&
 							   (desc->bDeviceClass == e->matchTables[i].bDeviceClass) &&
-							   (desc->bDeviceSubClass == e->matchTables[i].bDeviceSubClass)) {
+							   (desc->bDeviceSubClass == e->matchTables[i].bDeviceSubClass) &&
+							   ((devnum == -1) || (dev->devnum == devnum)) ) {
 								   int ac;
 								   for (ac = 0; ac < desc->bNumConfigurations; ac++) {
 									   struct usb_interface *interface = dev->config[ac].interface;
