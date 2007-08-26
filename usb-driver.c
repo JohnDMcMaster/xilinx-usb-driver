@@ -466,9 +466,8 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct event *e = (struct event*)(wdheader->data);
 				struct usb_bus *bus;
-				char* device_num;
-				char* remainder;
-				int devnum = -1;
+				char* devpos;
+				int busnum = -1, devnum = -1;
 				int i;
 
 				DPRINTF("handle: %lu, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: %lu, ver: %lu, nummatch: %lu\n",
@@ -480,14 +479,35 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				e->u.Usb.dwUniqueID, e->dwEventVer,
 				e->dwNumMatchTables);
 
-				device_num=getenv("XILINX_USB_DEVNUM");
-				if (device_num!=NULL) {
-					DPRINTF("XILINX_USB_BUS=%s\n",device_num);
-					devnum=strtol(device_num,&remainder,10);
-					if (device_num==remainder) /* no integer in env variable */
-						devnum=-1;
-				}
+				devpos = getenv("XILINX_USB_DEV");
+				if (devpos != NULL) {
+					int j;
+					char *devstr = NULL, *remainder;
 
+					DPRINTF("XILINX_USB_DEV=%s\n", devpos);
+
+					for (j = 0; j < strlen(devpos) && devpos[j] != 0; j++) {
+						if (devpos[j] == ':') {
+							devpos[j] = 0;
+							devstr = &(devpos[j+1]);
+						}
+					}
+
+					if (devstr && strlen(devstr) > 0) {
+						busnum = strtol(devpos, &remainder, 10);
+						if (devpos == remainder) {
+							busnum = -1;
+						} else {
+							devnum = strtol(devstr, &remainder, 10);
+							if (devstr == remainder) {
+								devnum = -1;
+							} else {
+								fprintf(stderr,"Using XILINX platform cable USB at %03d:%03d\n",
+								busnum, devnum);
+							}
+						}
+					}
+				}
 
 				for (i = 0; i < e->dwNumMatchTables; i++) {
 
@@ -502,6 +522,9 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 					for (bus = busses; bus; bus = bus->next) {
 						struct usb_device *dev;
+
+						if ((devnum != -1) && (strtol(bus->dirname, NULL, 10) != busnum))
+							continue;
 
 						for (dev = bus->devices; dev; dev = dev->next) {
 							struct usb_device_descriptor *desc = &(dev->descriptor);

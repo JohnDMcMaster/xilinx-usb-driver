@@ -74,6 +74,14 @@ these steps:
 4. restart udev and re-plug the cable
 
 
+If you have multiple cables connected, you can specify the cable to use
+in the XILINX_USB_DEV environment-variable as "bus:device".
+These identifiers are available in the output of lsusb:
+Bus 001 Device 004: ID 03fd:0008 Xilinx, Inc.
+    ^^^        ^^^
+To use this cable, set the XILINX_USB_DEV variable to "001:004".
+
+
 Notes for the parallel cable
 ============================
 
