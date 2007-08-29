@@ -69,7 +69,7 @@ these steps:
 2. Install the package containing /sbin/fxload from your linux distribution.
    It is usually called "fxload"
 
-3. copy the file /path/to/ISE/bin/lin/xusbdfwu.hex to /usr/share/xusbdfwu.hex
+3. copy the files /path/to/ISE/bin/lin/xusb*.hex to /usr/share/
 
 4. restart udev and re-plug the cable
 
