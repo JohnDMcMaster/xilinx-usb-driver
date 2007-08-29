@@ -500,6 +500,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 						} else {
 							devnum = strtol(devstr, &remainder, 10);
 							if (devstr == remainder) {
+								busnum = -1;
 								devnum = -1;
 							} else {
 								fprintf(stderr,"Using XILINX platform cable USB at %03d:%03d\n",
