@@ -534,7 +534,7 @@ int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 							   (desc->idProduct == e->matchTables[i].ProductId) &&
 							   (desc->bDeviceClass == e->matchTables[i].bDeviceClass) &&
 							   (desc->bDeviceSubClass == e->matchTables[i].bDeviceSubClass) &&
-							   ((devnum == -1) || (dev->devnum == devnum)) ) {
+							   ((devnum == -1) || (strtol(dev->filename, NULL, 10) == devnum)) ) {
 								   int ac;
 								   for (ac = 0; ac < desc->bNumConfigurations; ac++) {
 									   struct usb_interface *interface = dev->config[ac].interface;
