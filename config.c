@@ -143,7 +143,7 @@ static void read_config() {
 
 				vid = 0;
 				vid = strtol(pbuf, NULL, 16);
-				if (!num) {
+				if (!vid) {
 					PARSEERROR;
 					continue;
 				}
@@ -158,7 +158,7 @@ static void read_config() {
 
 				pid = 0;
 				pid = strtol(pbuf, NULL, 16);
-				if (!num) {
+				if (!pid) {
 					PARSEERROR;
 					continue;
 				}
