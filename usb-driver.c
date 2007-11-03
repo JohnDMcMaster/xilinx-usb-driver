@@ -47,9 +47,9 @@ static int windrvrfd = -1;
 static unsigned long ppbase = 0;
 static unsigned long ecpbase = 0;
 static struct parport_config *pport = NULL;
-FILE *modulesfp = NULL;
-FILE *baseaddrfp = NULL;
-int baseaddrnum = 0;
+static FILE *modulesfp = NULL;
+static FILE *baseaddrfp = NULL;
+static int baseaddrnum = 0;
 static int modules_read = 0;
 static struct usb_bus *busses = NULL;
 static struct usb_device *usbdevice;
@@ -72,7 +72,7 @@ void hexdump(unsigned char *buf, int len) {
 	fprintf(stderr,"\n");
 }
 
-int usb_deviceinfo(unsigned char *buf) {
+static int usb_deviceinfo(unsigned char *buf) {
 	int i,j,k,l;
 	int len = 0;
 	WDU_CONFIGURATION **pConfigs, **pActiveConfig;
@@ -232,7 +232,7 @@ int usb_deviceinfo(unsigned char *buf) {
 	return len;
 }
 
-int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
+static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	struct header_struct* wdheader = (struct header_struct*)wdioctl;
 	struct version_struct *version;
 	int ret = 0;

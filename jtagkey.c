@@ -109,7 +109,8 @@ void jtagkey_close(int handle) {
 	}
 }
 
-void jtagkey_state(unsigned char data) {
+#ifdef DEBUG
+static void jtagkey_state(unsigned char data) {
 	fprintf(stderr,"Pins high: ");
 
 	if (data & JTAGKEY_TCK)
@@ -129,6 +130,7 @@ void jtagkey_state(unsigned char data) {
 	
 	fprintf(stderr,"\n");
 }
+#endif
 
 struct jtagkey_reader_arg {
 	int		num;
