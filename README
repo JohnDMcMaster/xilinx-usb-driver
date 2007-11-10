@@ -51,7 +51,7 @@ Notes for the USB cable
 =======================
 
 To use the device as an ordinary user, put the following line in a new
-file in /etc/udev/rules.d/ and restart udev:
+file "libusb-driver.rules" in /etc/udev/rules.d/ and restart udev:
 ACTION=="add", BUS=="usb", SYSFS{idVendor}=="03fd", MODE="666"
 
 
