@@ -9,14 +9,14 @@ should work on every kernel version which is supported by libusb and supports
 ppdev. It was written against impact from ISE Webpack 9.1SP1 and tested with
 the following software:
 
- * ISE Webpack 9.2SP1, SP2, SP3
+ * ISE Webpack 9.2SP1, SP2, SP3, SP4
  * ISE Webpack 9.1SP1, SP2, SP3
  * ISE Webpack 8.2SP3
  * ISE Webpack 8.1SP3
- * ChipScope 9.2.01i, 9.2.02i
+ * ChipScope 9.2.01i, 9.2.02i, 9.2.03i, 9.2.04i
  * ChipScope 9.1.02i, 9.1.03i
  * ChipScope 8.2.04i
- * EDK 9.2.01i
+ * EDK 9.2.01i, 9.2.02i
  * EDK 9.1.01i, 9.1.02i
  * EDK 8.2.02i
  * EDK 8.1.02i
