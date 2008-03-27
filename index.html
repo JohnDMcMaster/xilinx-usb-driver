@@ -5,9 +5,11 @@
 	</HEAD>
 	<BODY BGCOLOR="#FFFFFF" TEXT="#000000">
 		<H1>XILINX JTAG tools on Linux without proprietary kernel modules</H1>
-		<P><B>News</B> (<I>2008-03-26</I>): Xilinx is about to release their own drivers based on libusb.
-		They will be located at:
-		<A HREF="http://www.xilinx.com/support/answers/25249.htm">http://www.xilinx.com/support/answers/25249.htm</A>
+		<P><B>News</B> (<I>2008-03-26</I>): Xilinx has released their own drivers based on libusb with ISE Design Suite 10.1.
+		To use them, you need to set the environment-variable <kbd>XIL_IMPACT_USE_LIBUSB</kbd> to <kbd>1</kbd>
+		before running the tools. The driver on this page no longer needs to be preloaded if you only used
+		it to access USB cables. Parallel port support still seems to rely on <i>windrvr</i>, which can be
+		emulated by <i>libusb-driver</i>.
 		</P>
 		<H2>About</H2>
 		<P>
