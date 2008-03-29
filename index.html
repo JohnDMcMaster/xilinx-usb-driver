@@ -9,7 +9,14 @@
 		To use them, you need to set the environment-variable <kbd>XIL_IMPACT_USE_LIBUSB</kbd> to <kbd>1</kbd>
 		before running the tools. The driver on this page no longer needs to be preloaded if you only used
 		it to access USB cables. Parallel port support still seems to rely on <i>windrvr</i>, which can be
-		emulated by <i>libusb-driver</i>.
+		emulated by <i>libusb-driver</i>.<BR>
+		<B>Using 32-bit ISE 10.1 on a 64-bit platform:</B> When using the 32-bit JTAG tools from ISE Design
+		Suite 10.1 on a 64-bit machine, the tools will not connect to the cable but output the following
+		error: <I>Cable operation is not supported when running the 32-bit version of the application on a
+		64-bit platform.</I><BR>
+		To fix this, run the tools with <KBD>linux32</KBD> or preload the newest 32-bit version of
+		<i>libusb-driver</i>. This will lead the tools to believe that they are running on a 32-bit
+		platform and allows them to connect to the cables.
 		</P>
 		<H2>About</H2>
 		<P>
