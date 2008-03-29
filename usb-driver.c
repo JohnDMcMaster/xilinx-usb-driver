@@ -39,6 +39,8 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <sys/ioctl.h>
+#include <sys/utsname.h>
+#include <bits/wordsize.h>
 #include "usb-driver.h"
 #include "config.h"
 
@@ -937,3 +939,21 @@ int access(const char *pathname, int mode) {
 		return (*func)(pathname, mode);
 	}
 }
+
+#if __WORDSIZE == 32
+int uname (struct utsname *__name) {
+	static int (*func) (struct utsname*);
+	int ret;
+
+	if (!func)
+		func = (int (*) (struct utsname*)) dlsym(RTLD_NEXT, "uname");
+	
+	ret = (*func)(__name);
+
+	if (ret == 0 && (!strcmp(__name->machine, "x86_64"))) {
+		strcpy(__name->machine, "i686");
+	}
+	
+	return ret;
+}
+#endif
