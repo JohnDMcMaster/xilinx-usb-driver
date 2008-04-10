@@ -858,8 +858,10 @@ int close(int fd) {
 	if (fd == windrvrfd && windrvrfd >= 0) {
 		DPRINTF("close windrvrfd\n");
 
-		if (usb_devhandle)
+		if (usb_devhandle) {
+			usb_claim(0);
 			usb_close(usb_devhandle);
+		}
 
 		usb_devhandle = NULL;
 		usbinterface = -1;
