@@ -450,8 +450,15 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
 				if (usbdevice) {
-					if (!usb_devhandle)
+					if (!usb_devhandle) {
 						usb_devhandle = usb_open(usbdevice);
+#ifndef NO_USB_RESET
+						if (usb_devhandle) {
+							usb_reset(usb_devhandle);
+							usb_devhandle = usb_open(usbdevice);
+						}
+#endif
+					}
 
 					usbinterface = usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber;
 					usbalternate = usi->dwAlternateSetting;
