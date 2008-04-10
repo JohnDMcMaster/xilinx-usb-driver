@@ -1,6 +1,8 @@
 #Add -DFORCE_PC3_IDENT to CFLAGS to force the identification of
 #a Parallel Cable III
-CFLAGS=-Wall -fPIC -DUSB_DRIVER_VERSION="\"$(shell stat -c '%y' usb-driver.c |cut -d\. -f1)\"" #-DFORCE_PC3_IDENT
+#Add -DNO_USB_RESET to disable the hard reset of the cable on
+#close of the device
+CFLAGS=-Wall -fPIC -DUSB_DRIVER_VERSION="\"$(shell stat -c '%y' usb-driver.c |cut -d\. -f1)\"" #-DFORCE_PC3_IDENT -DNO_USB_RESET
 
 LIBS=-ldl -lusb -lpthread
 

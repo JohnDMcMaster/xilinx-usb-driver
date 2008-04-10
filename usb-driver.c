@@ -830,8 +830,12 @@ int close(int fd) {
 		if (usbinterface >= 0)
 			usb_release_interface(usb_devhandle, usbinterface);
 
-		if (usb_devhandle)
+		if (usb_devhandle) {
+#ifndef NO_USB_RESET
+			usb_reset(usb_devhandle);
+#endif
 			usb_close(usb_devhandle);
+		}
 
 		usb_devhandle = NULL;
 		usbinterface = -1;
