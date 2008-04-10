@@ -20,6 +20,12 @@ int parport_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 	unsigned char val;
 	static unsigned char last_pp_write = 0;
 
+	if (parportfd < 0)
+		return ret;
+
+	if (ioctl(parportfd, PPCLAIM) == -1)
+		return -1;
+
 	for (i = 0; i < num; i++) {
 		DPRINTF("dwPort: 0x%lx, cmdTrans: %lu, dwbytes: %ld, fautoinc: %ld, dwoptions: %ld\n",
 				(unsigned long)tr[i].dwPort, tr[i].cmdTrans, tr[i].dwBytes,
@@ -32,9 +38,6 @@ int parport_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		if (tr[i].cmdTrans == 13)
 			DPRINTF("write byte: %d\n", val);
 #endif
-
-		if (parportfd < 0)
-			return ret;
 
 		if (port == ppbase + PP_DATA) {
 			DPRINTF("data port\n");
@@ -114,6 +117,8 @@ int parport_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 #endif
 	}
 
+	ioctl(parportfd, PPRELEASE);
+
 	return ret;
 }
 
@@ -139,6 +144,7 @@ int parport_open(int num) {
 		if (ioctl(parportfd, PPNEGOT, &pmode) == -1)
 			return -1;
 
+		ioctl(parportfd, PPRELEASE);
 #if 0
 		if (cr->Card.dwItems > 1 && cr->Card.Item[1].I.IO.dwAddr) {
 			DPRINTF("ECP mode requested\n");

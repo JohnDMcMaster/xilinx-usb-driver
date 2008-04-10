@@ -57,6 +57,7 @@ static struct usb_bus *busses = NULL;
 static struct usb_device *usbdevice;
 static usb_dev_handle *usb_devhandle = NULL;
 static int usbinterface = -1;
+static int usbalternate = -1;
 static unsigned long card_type;
 static int ints_enabled = 0;
 static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
@@ -234,6 +235,39 @@ static int usb_deviceinfo(unsigned char *buf) {
 	return len;
 }
 
+static int usb_claim(int claim) {
+	int ret = 0;
+	static int claimed = 0;
+
+	if (usbinterface < 0)
+		return -1;
+	
+	if (claim) {
+		if (claimed)
+			return 0;
+
+		ret = usb_claim_interface(usb_devhandle, usbinterface);
+		if (!ret) {
+			claimed = 1;
+			ret = usb_set_altinterface(usb_devhandle, usbalternate);
+			if (ret)
+				fprintf(stderr, "usb_set_altinterface: %d\n", ret);
+		} else {
+			fprintf(stderr, "usb_claim_interface: %d -> %d (%s)\n",
+					usbinterface, ret, usb_strerror());
+		}
+	} else {
+		if (!claimed)
+			return 0;
+
+		ret = usb_release_interface(usb_devhandle, usbinterface);
+		if (!ret)
+			claimed = 0;
+	}
+
+	return ret;
+}
+
 static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	struct header_struct* wdheader = (struct header_struct*)wdioctl;
 	struct version_struct *version;
@@ -307,8 +341,10 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				DPRINTF(" unique: %lu, pipe: %lu, read: %lu, options: %lx, size: %lu, timeout: %lx\n",
 				ut->dwUniqueID, ut->dwPipeNum, ut->fRead,
 				ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
-				DPRINTF("setup packet: ");
-				hexdump(ut->SetupPacket, 8);
+				if (ut->dwPipeNum == 0) {
+					DPRINTF("setup packet: ");
+					hexdump(ut->SetupPacket, 8);
+				}
 
 				if (!ut->fRead && ut->dwBufferSize)
 				{
@@ -319,6 +355,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
+				usb_claim(1);
 				/* http://www.jungo.com/support/documentation/windriver/802/wdusb_man_mhtml/node55.html#SECTION001213000000000000000 */
 				if (ut->dwPipeNum == 0) { /* control pipe */
 					int requesttype, request, value, index, size;
@@ -332,10 +369,10 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				} else {
 					if (ut->fRead) {
 						ret = usb_bulk_read(usb_devhandle, ut->dwPipeNum, ut->pBuffer, ut->dwBufferSize, ut->dwTimeout);
-
 					} else {
 						ret = usb_bulk_write(usb_devhandle, ut->dwPipeNum, ut->pBuffer, ut->dwBufferSize, ut->dwTimeout);
 					}
+					usb_claim(0);
 				}
 
 				if (ret < 0) {
@@ -416,22 +453,8 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					if (!usb_devhandle)
 						usb_devhandle = usb_open(usbdevice);
 
-					/* FIXME: Select right interface! */
-					ret = usb_claim_interface(usb_devhandle, usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber);
-					if (!ret) {
-						if(!ret) {
-							usbinterface = usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber;
-							ret = usb_set_altinterface(usb_devhandle, usi->dwAlternateSetting);
-							if (ret)
-								fprintf(stderr, "usb_set_altinterface: %d\n", ret);
-						} else {
-							fprintf(stderr, "usb_set_configuration: %d (%s)\n", ret, usb_strerror());
-						}
-					} else {
-						fprintf(stderr, "usb_claim_interface: %d -> %d (%s)\n",
-						usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber,
-						ret, usb_strerror());
-					}
+					usbinterface = usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber;
+					usbalternate = usi->dwAlternateSetting;
 				}
 #endif
 				DPRINTF("unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n",
@@ -827,15 +850,9 @@ int close(int fd) {
 	
 	if (fd == windrvrfd && windrvrfd >= 0) {
 		DPRINTF("close windrvrfd\n");
-		if (usbinterface >= 0)
-			usb_release_interface(usb_devhandle, usbinterface);
 
-		if (usb_devhandle) {
-#ifndef NO_USB_RESET
-			usb_reset(usb_devhandle);
-#endif
+		if (usb_devhandle)
 			usb_close(usb_devhandle);
-		}
 
 		usb_devhandle = NULL;
 		usbinterface = -1;
