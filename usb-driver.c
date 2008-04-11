@@ -160,32 +160,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				xpcu_claim(xpcu, XPCU_CLAIM);
-				/* http://www.jungo.com/support/documentation/windriver/802/wdusb_man_mhtml/node55.html#SECTION001213000000000000000 */
-				if (ut->dwPipeNum == 0) { /* control pipe */
-					int requesttype, request, value, index, size;
-					requesttype = ut->SetupPacket[0];
-					request = ut->SetupPacket[1];
-					value = ut->SetupPacket[2] | (ut->SetupPacket[3] << 8);
-					index = ut->SetupPacket[4] | (ut->SetupPacket[5] << 8);
-					size = ut->SetupPacket[6] | (ut->SetupPacket[7] << 8);
-					DPRINTF("requesttype: %x, request: %x, value: %u, index: %u, size: %u\n", requesttype, request, value, index, size);
-					ret = usb_control_msg(xpcu->handle, requesttype, request, value, index, ut->pBuffer, size, ut->dwTimeout);
-				} else {
-					if (ut->fRead) {
-						ret = usb_bulk_read(xpcu->handle, ut->dwPipeNum, ut->pBuffer, ut->dwBufferSize, ut->dwTimeout);
-					} else {
-						ret = usb_bulk_write(xpcu->handle, ut->dwPipeNum, ut->pBuffer, ut->dwBufferSize, ut->dwTimeout);
-					}
-					xpcu_claim(xpcu, XPCU_RELEASE);
-				}
-
-				if (ret < 0) {
-					fprintf(stderr, "usb_transfer: %d (%s)\n", ret, usb_strerror());
-				} else {
-					ut->dwBytesTransferred = ret;
-					ret = 0;
-				}
+				xpcu_transfer(xpcu, ut);
 #endif
 
 #ifdef DEBUG

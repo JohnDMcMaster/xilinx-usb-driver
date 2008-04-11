@@ -3,8 +3,8 @@
 #include <unistd.h>
 #include <strings.h>
 #include <usb.h>
-#include "xpcu.h"
 #include "usb-driver.h"
+#include "xpcu.h"
 
 int xpcu_deviceinfo(struct xpcu_s *xpcu, unsigned char *buf) {
 	int i,j,k,l;
@@ -194,6 +194,39 @@ int xpcu_claim(struct xpcu_s *xpcu, int claim) {
 		ret = usb_release_interface(xpcu->handle, xpcu->interface);
 		if (!ret)
 			claimed = 0;
+	}
+
+	return ret;
+}
+
+int xpcu_transfer(struct xpcu_s *xpcu, struct usb_transfer *ut) {
+	int ret = 0;
+
+	xpcu_claim(xpcu, XPCU_CLAIM);
+	/* http://www.jungo.com/support/documentation/windriver/802/wdusb_man_mhtml/node55.html#SECTION001213000000000000000 */
+	if (ut->dwPipeNum == 0) { /* control pipe */
+		int requesttype, request, value, index, size;
+		requesttype = ut->SetupPacket[0];
+		request = ut->SetupPacket[1];
+		value = ut->SetupPacket[2] | (ut->SetupPacket[3] << 8);
+		index = ut->SetupPacket[4] | (ut->SetupPacket[5] << 8);
+		size = ut->SetupPacket[6] | (ut->SetupPacket[7] << 8);
+		DPRINTF("requesttype: %x, request: %x, value: %u, index: %u, size: %u\n", requesttype, request, value, index, size);
+		ret = usb_control_msg(xpcu->handle, requesttype, request, value, index, ut->pBuffer, size, ut->dwTimeout);
+	} else {
+		if (ut->fRead) {
+			ret = usb_bulk_read(xpcu->handle, ut->dwPipeNum, ut->pBuffer, ut->dwBufferSize, ut->dwTimeout);
+		} else {
+			ret = usb_bulk_write(xpcu->handle, ut->dwPipeNum, ut->pBuffer, ut->dwBufferSize, ut->dwTimeout);
+		}
+		xpcu_claim(xpcu, XPCU_RELEASE);
+	}
+
+	if (ret < 0) {
+		fprintf(stderr, "usb_transfer: %d (%s)\n", ret, usb_strerror());
+	} else {
+		ut->dwBytesTransferred = ret;
+		ret = 0;
 	}
 
 	return ret;

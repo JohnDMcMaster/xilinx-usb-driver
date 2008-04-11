@@ -11,4 +11,5 @@ struct xpcu_s {
 
 int __attribute__ ((visibility ("hidden"))) xpcu_deviceinfo(struct xpcu_s *xpcu, unsigned char *buf);
 int __attribute__ ((visibility ("hidden"))) xpcu_claim(struct xpcu_s *xpcu, int claim);
+int __attribute__ ((visibility ("hidden"))) xpcu_transfer(struct xpcu_s *xpcu, struct usb_transfer *ut);
 struct xpcu_s __attribute__ ((visibility ("hidden"))) *xpcu_open(void);
