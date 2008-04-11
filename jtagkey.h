@@ -5,6 +5,6 @@
 #define JTAGKEY_VREF	0x20
 #define JTAGKEY_OEn	0x10
 
-int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, int ecpbase, int num);
-int jtagkey_open(int num);
-void jtagkey_close(int handle);
+int __attribute__ ((visibility ("hidden"))) jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, int ecpbase, int num);
+int __attribute__ ((visibility ("hidden"))) jtagkey_open(int num);
+void __attribute__ ((visibility ("hidden"))) jtagkey_close(int handle);

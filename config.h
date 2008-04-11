@@ -9,7 +9,7 @@ struct parport_config {
 	int (*transfer) (WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, int ecpbase, int num);
 };
 
-struct parport_config *config_get(int num);
-unsigned char config_is_real_pport(int num);
-unsigned short config_usb_vid(int num);
-unsigned short config_usb_pid(int num);
+struct parport_config __attribute__ ((visibility ("hidden"))) *config_get(int num);
+unsigned char __attribute__ ((visibility ("hidden"))) config_is_real_pport(int num);
+unsigned short __attribute__ ((visibility ("hidden"))) config_usb_vid(int num);
+unsigned short __attribute__ ((visibility ("hidden"))) config_usb_pid(int num);
