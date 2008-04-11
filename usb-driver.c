@@ -633,13 +633,9 @@ int close(int fd) {
 	if (fd == windrvrfd && windrvrfd >= 0) {
 		DPRINTF("close windrvrfd\n");
 
-		if (xpcu->handle) {
-			xpcu_claim(xpcu, XPCU_RELEASE);
-			usb_close(xpcu->handle);
-		}
+		if (xpcu)
+			xpcu_close(xpcu);
 
-		xpcu->handle = NULL;
-		xpcu->interface = -1;
 		xpcu = NULL;
 		windrvrfd = -1;
 	}

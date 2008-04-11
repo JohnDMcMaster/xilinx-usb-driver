@@ -166,7 +166,7 @@ int xpcu_deviceinfo(struct xpcu_s *xpcu, unsigned char *buf) {
 	return len;
 }
 
-int xpcu_claim(struct xpcu_s *xpcu, int claim) {
+static int xpcu_claim(struct xpcu_s *xpcu, int claim) {
 	int ret = 0;
 	static int claimed = 0;
 
@@ -246,4 +246,15 @@ struct xpcu_s *xpcu_open(void) {
 	xpcu.busses = usb_get_busses();
 
 	return &xpcu;
+}
+
+void xpcu_close(struct xpcu_s *xpcu) {
+	if (xpcu->handle) {
+		xpcu_claim(xpcu, XPCU_RELEASE);
+		usb_close(xpcu->handle);
+	}
+
+	xpcu->handle = NULL;
+	xpcu->interface = -1;
+	xpcu->alternate = -1;
 }
