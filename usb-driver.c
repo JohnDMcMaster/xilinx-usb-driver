@@ -35,7 +35,6 @@
 #include <stdio.h>
 #include <usb.h>
 #include <signal.h>
-#include <pthread.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <sys/ioctl.h>
@@ -55,8 +54,6 @@ static FILE *modulesfp = NULL;
 static FILE *baseaddrfp = NULL;
 static int baseaddrnum = 0;
 static int modules_read = 0;
-static int ints_enabled = 0;
-static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
 
 #define NO_WINDRVR 1
 
@@ -100,13 +97,13 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct card_register* cr = (struct card_register*)(wdheader->data);
 
-				DPRINTF("Items: %lu, Addr: 0x%lx, bytes: %lu, bar: %lu\n",
+				DPRINTF("-> Items: %lu, Addr: 0x%lx, bytes: %lu, bar: %lu\n",
 				cr->Card.dwItems,
 				(unsigned long)cr->Card.Item[0].I.IO.dwAddr,
 				cr->Card.Item[0].I.IO.dwBytes,
 				cr->Card.Item[0].I.IO.dwBar);
 				
-				DPRINTF("Items: %lu, Addr: 0x%lx, bytes: %lu, bar: %lu\n",
+				DPRINTF("-> Items: %lu, Addr: 0x%lx, bytes: %lu, bar: %lu\n",
 				cr->Card.dwItems,
 				(unsigned long)cr->Card.Item[1].I.IO.dwAddr,
 				cr->Card.Item[1].I.IO.dwBytes,
@@ -132,21 +129,21 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					cr->hCard = 0;
 				}
 #endif
-				DPRINTF("hCard: %lu\n", cr->hCard);
+				DPRINTF("<-hCard: %lu\n", cr->hCard);
 			}
 			break;
 
 		case USB_TRANSFER:
-			DPRINTF("in USB_TRANSFER");
+			DPRINTF("USB_TRANSFER\n");
 			{
 				struct usb_transfer *ut = (struct usb_transfer*)(wdheader->data);
 
 #ifdef DEBUG
-				DPRINTF(" unique: 0x%lx, pipe: %lu, read: %lu, options: %lx, size: %lu, timeout: %lx\n",
+				DPRINTF("-> unique: 0x%lx, pipe: %lu, read: %lu, options: %lx, size: %lu, timeout: %lx\n",
 				ut->dwUniqueID, ut->dwPipeNum, ut->fRead,
 				ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
 				if (ut->dwPipeNum == 0) {
-					DPRINTF("setup packet: ");
+					DPRINTF("-> setup packet: ");
 					hexdump(ut->SetupPacket, 8);
 				}
 
@@ -166,7 +163,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				DPRINTF("Transferred: %lu (%s)\n",ut->dwBytesTransferred, (ut->fRead?"read":"write"));
 				if (ut->fRead && ut->dwBytesTransferred)
 				{
-					DPRINTF("Read: ");
+					DPRINTF("<- Read: ");
 					hexdump(ut->pBuffer, ut->dwBytesTransferred);
 				}
 #endif
@@ -179,15 +176,21 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-				DPRINTF("Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
+				DPRINTF("-> Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
 				it->hInterrupt, it->dwOptions,
 				it->dwCmds, it->fEnableOk, it->dwCounter,
 				it->dwLost, it->fStopped);
 
-				it->fEnableOk = 1;
-				it->fStopped = 0;
-				ints_enabled = 1;
-				pthread_mutex_trylock(&int_wait);
+#ifndef NO_WINDRVR
+				ret = (*ioctl_func) (fd, request, wdioctl);
+#else
+				xpcu_int_state(xpcu, it, ENABLE_INTERRUPT);
+#endif
+
+				DPRINTF("<- Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
+				it->hInterrupt, it->dwOptions,
+				it->dwCmds, it->fEnableOk, it->dwCounter,
+				it->dwLost, it->fStopped);
 			}
 
 			break;
@@ -197,20 +200,16 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-				DPRINTF("Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
+				DPRINTF("-> Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
 				it->hInterrupt, it->dwOptions,
 				it->dwCmds, it->fEnableOk, it->dwCounter,
 				it->dwLost, it->fStopped);
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				it->dwCounter = 0;
-				it->fStopped = 1;
-				ints_enabled = 0;
-				if (pthread_mutex_trylock(&int_wait) == EBUSY)
-					pthread_mutex_unlock(&int_wait);
+				xpcu_int_state(xpcu, it, DISABLE_INTERRUPT);
 #endif
-				DPRINTF("Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
+				DPRINTF("<- Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
 				it->hInterrupt, it->dwOptions,
 				it->dwCmds, it->fEnableOk, it->dwCounter,
 				it->dwLost, it->fStopped);
@@ -222,7 +221,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct usb_set_interface *usi = (struct usb_set_interface*)(wdheader->data);
 
-				DPRINTF("unique: 0x%lx, interfacenum: %lu, alternatesetting: %lu, options: %lx\n",
+				DPRINTF("-> unique: 0x%lx, interfacenum: %lu, alternatesetting: %lu, options: %lx\n",
 				usi->dwUniqueID, usi->dwInterfaceNum,
 				usi->dwAlternateSetting, usi->dwOptions);
 #ifndef NO_WINDRVR
@@ -230,7 +229,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #else
 				xpcu_set_interface(xpcu, usi);
 #endif
-				DPRINTF("unique: 0x%lx, interfacenum: %lu, alternatesetting: %lu, options: %lx\n",
+				DPRINTF("<- unique: 0x%lx, interfacenum: %lu, alternatesetting: %lu, options: %lx\n",
 				usi->dwUniqueID, usi->dwInterfaceNum,
 				usi->dwAlternateSetting, usi->dwOptions);
 			}
@@ -242,7 +241,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct usb_get_device_data *ugdd = (struct usb_get_device_data*)(wdheader->data);
 
-				DPRINTF("unique: 0x%lx, bytes: %lu, options: %lx\n",
+				DPRINTF("-> unique: 0x%lx, bytes: %lu, options: %lx\n",
 				ugdd->dwUniqueID, ugdd->dwBytes,
 				ugdd->dwOptions);
 
@@ -260,7 +259,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				int i;
 #endif
 
-				DPRINTF("handle: 0x%lx, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: 0x%lx, ver: %lu, nummatch: %lu\n",
+				DPRINTF("-> handle: 0x%lx, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: 0x%lx, ver: %lu, nummatch: %lu\n",
 				e->handle, e->dwAction,
 				e->dwStatus, e->dwEventId, e->dwCardType,
 				e->hKernelPlugIn, e->dwOptions,
@@ -269,15 +268,14 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				e->u.Usb.dwUniqueID, e->dwEventVer,
 				e->dwNumMatchTables);
 
-				xpcu = xpcu_find(e);
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				e->handle = (unsigned long)xpcu;
+				xpcu = xpcu_find(e);
 #endif
 
 #ifdef DEBUG
-				DPRINTF("handle: 0x%lx, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: 0x%lx, ver: %lu, nummatch: %lu\n",
+				DPRINTF("<- handle: 0x%lx, action: %lu, status: %lu, eventid: %lu, cardtype: %lu, kplug: %lu, options: %lu, dev: %lx:%lx, unique: 0x%lx, ver: %lu, nummatch: %lu\n",
 				e->handle, e->dwAction,
 				e->dwStatus, e->dwEventId, e->dwCardType,
 				e->hKernelPlugIn, e->dwOptions,
@@ -345,7 +343,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct interrupt *it = (struct interrupt*)(wdheader->data);
 
-				DPRINTF("Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
+				DPRINTF("-> Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
 				it->hInterrupt, it->dwOptions,
 				it->dwCmds, it->fEnableOk, it->dwCounter,
 				it->dwLost, it->fStopped);
@@ -353,20 +351,10 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				if (xpcu) {
-					if (it->dwCounter == 0) {
-						it->dwCounter = 1;
-					} else {
-						pthread_mutex_lock(&int_wait);
-						pthread_mutex_unlock(&int_wait);
-					}
-				} else {
-					pthread_mutex_lock(&int_wait);
-					pthread_mutex_unlock(&int_wait);
-				}
+				xpcu_int_wait(xpcu, it);
 #endif
 
-				DPRINTF("INT_WAIT_RETURN: Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
+				DPRINTF("<- INT_WAIT_RETURN: Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
 				it->hInterrupt, it->dwOptions, it->dwCmds,
 				it->fEnableOk, it->dwCounter, it->dwLost,
 				it->fStopped);
@@ -378,12 +366,12 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 			{
 				struct card_register* cr = (struct card_register*)(wdheader->data);
 
-				DPRINTF("Addr: 0x%lx, bytes: %lu, bar: %lu\n",
+				DPRINTF("-> Addr: 0x%lx, bytes: %lu, bar: %lu\n",
 				(unsigned long)cr->Card.Item[0].I.IO.dwAddr,
 				cr->Card.Item[0].I.IO.dwBytes,
 				cr->Card.Item[0].I.IO.dwBar);
 
-				DPRINTF("hCard: %lu\n", cr->hCard);
+				DPRINTF("-> hCard: %lu\n", cr->hCard);
 
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
@@ -403,7 +391,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifdef DEBUG
 				int i;
 
-				DPRINTF("handle: 0x%lx, action: %lu, status: %lu, eventid: %lu, cardtype: %lx, kplug: %lu, options: %lu, dev: %lx:%lx, unique: 0x%lx, ver: %lu, nummatch: %lu\n",
+				DPRINTF("-> handle: 0x%lx, action: %lu, status: %lu, eventid: %lu, cardtype: %lx, kplug: %lu, options: %lu, dev: %lx:%lx, unique: 0x%lx, ver: %lu, nummatch: %lu\n",
 				e->handle, e->dwAction, e->dwStatus,
 				e->dwEventId, e->dwCardType, e->hKernelPlugIn,
 				e->dwOptions, e->u.Usb.deviceId.dwVendorId,
@@ -412,7 +400,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				e->dwNumMatchTables);
 
 				for (i = 0; i < e->dwNumMatchTables; i++)
-					DPRINTF("match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n",
+					DPRINTF("-> match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n",
 					e->matchTables[i].VendorId,
 					e->matchTables[i].ProductId,
 					e->matchTables[i].bDeviceClass,
@@ -429,7 +417,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #endif
 
 #ifdef DEBUG
-				DPRINTF("handle: 0x%lx, action: %lu, status: %lu, eventid: %lu, cardtype: %lx, kplug: %lu, options: %lu, dev: %lx:%lx, unique: 0x%lx, ver: %lu, nummatch: %lu\n",
+				DPRINTF("<- handle: 0x%lx, action: %lu, status: %lu, eventid: %lu, cardtype: %lx, kplug: %lu, options: %lu, dev: %lx:%lx, unique: 0x%lx, ver: %lu, nummatch: %lu\n",
 				e->handle, e->dwAction, e->dwStatus,
 				e->dwEventId, e->dwCardType, e->hKernelPlugIn,
 				e->dwOptions, e->u.Usb.deviceId.dwVendorId,
@@ -438,7 +426,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				e->dwNumMatchTables);
 
 				for (i = 0; i < e->dwNumMatchTables; i++)
-					DPRINTF("match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n",
+					DPRINTF("<- match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n",
 					e->matchTables[i].VendorId,
 					e->matchTables[i].ProductId,
 					e->matchTables[i].bDeviceClass,

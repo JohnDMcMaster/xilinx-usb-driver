@@ -5,10 +5,12 @@
 #include <strings.h>
 #include <usb.h>
 #include <errno.h>
+#include <pthread.h>
 #include "usb-driver.h"
 #include "xpcu.h"
 
 static struct usb_bus *busses = NULL;
+static pthread_mutex_t dummy_interrupt = PTHREAD_MUTEX_INITIALIZER;
 
 int xpcu_deviceinfo(struct xpcu_s *xpcu, struct usb_get_device_data *ugdd) {
 	int i,j,k,l;
@@ -225,7 +227,7 @@ int xpcu_transfer(struct xpcu_s *xpcu, struct usb_transfer *ut) {
 		value = ut->SetupPacket[2] | (ut->SetupPacket[3] << 8);
 		index = ut->SetupPacket[4] | (ut->SetupPacket[5] << 8);
 		size = ut->SetupPacket[6] | (ut->SetupPacket[7] << 8);
-		DPRINTF("requesttype: %x, request: %x, value: %u, index: %u, size: %u\n", requesttype, request, value, index, size);
+		DPRINTF("-> requesttype: %x, request: %x, value: %u, index: %u, size: %u\n", requesttype, request, value, index, size);
 		ret = usb_control_msg(xpcu->handle, requesttype, request, value, index, ut->pBuffer, size, ut->dwTimeout);
 	} else {
 		if (ut->fRead) {
@@ -286,9 +288,6 @@ struct xpcu_s *xpcu_find(struct event *e) {
 	int i;
 
 	bzero(&xpcu, sizeof(xpcu));
-	xpcu.interface = -1;
-	xpcu.alternate = -1;
-
 	xpcu_init();
 
 	devpos = getenv("XILINX_USB_DEV");
@@ -363,8 +362,13 @@ struct xpcu_s *xpcu_find(struct event *e) {
 									(interface->altsetting[ai].bInterfaceProtocol == e->matchTables[i].bInterfaceProtocol)){
 								/* TODO: check interfaceClass! */
 								DPRINTF("found device with libusb\n");
+
+								xpcu.interface = -1;
+								xpcu.alternate = -1;
 								xpcu.dev = dev;
 								xpcu.card_type = e->dwCardType;
+								pthread_mutex_init(&xpcu.interrupt, NULL);
+								e->handle = (unsigned long)&xpcu;
 							}
 						}
 					}
@@ -373,8 +377,10 @@ struct xpcu_s *xpcu_find(struct event *e) {
 		}
 	}
 
-	if (!xpcu.dev)
+	if (!xpcu.dev) {
+		e->handle = 0;
 		return NULL;
+	}
 
 	return &xpcu;
 }
@@ -411,5 +417,43 @@ void xpcu_close(struct xpcu_s *xpcu, struct event *e) {
 		xpcu->interface = -1;
 		xpcu->alternate = -1;
 		busses = NULL;
+	}
+}
+
+void xpcu_int_state(struct xpcu_s *xpcu, struct interrupt *it, int enable) {
+	static pthread_mutex_t *interrupt = &dummy_interrupt;
+
+	if (it->hInterrupt != (unsigned long)xpcu)
+		return;
+	
+	if (xpcu)
+		interrupt = &xpcu->interrupt;
+	
+	if (enable == ENABLE_INTERRUPT) {
+		it->fEnableOk = 1;
+		it->fStopped = 0;
+		pthread_mutex_trylock(interrupt);
+	} else {
+		it->dwCounter = 0;
+		it->fStopped = 1;
+		if (pthread_mutex_trylock(interrupt) == EBUSY)
+			pthread_mutex_unlock(interrupt);
+	}
+}
+
+void xpcu_int_wait(struct xpcu_s *xpcu, struct interrupt *it) {
+	if (it->hInterrupt != (unsigned long)xpcu)
+		return;
+	
+	if (xpcu) {
+		if (it->dwCounter == 0) {
+			it->dwCounter = 1;
+		} else {
+			pthread_mutex_lock(&xpcu->interrupt);
+			pthread_mutex_unlock(&xpcu->interrupt);
+		}
+	} else {
+		pthread_mutex_lock(&dummy_interrupt);
+		pthread_mutex_unlock(&dummy_interrupt);
 	}
 }
