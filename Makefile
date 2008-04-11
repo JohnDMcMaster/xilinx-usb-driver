@@ -6,8 +6,8 @@ CFLAGS=-Wall -fPIC -DUSB_DRIVER_VERSION="\"$(shell stat -c '%y' usb-driver.c |cu
 
 LIBS=-ldl -lusb -lpthread
 
-SRC=usb-driver.c parport.c config.c jtagmon.c
-HEADER=usb-driver.h parport.h jtagkey.h config.h jtagmon.h
+SRC=usb-driver.c xpcu.c parport.c config.c jtagmon.c
+HEADER=usb-driver.h xpcu.h parport.h jtagkey.h config.h jtagmon.h
 
 ifeq ($(LIBVER),32)
 CFLAGS += -m32

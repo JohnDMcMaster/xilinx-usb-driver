@@ -43,21 +43,18 @@
 #include <bits/wordsize.h>
 #include "usb-driver.h"
 #include "config.h"
+#include "xpcu.h"
 
 static int (*ioctl_func) (int, int, void *) = NULL;
 static int windrvrfd = -1;
 static unsigned long ppbase = 0;
 static unsigned long ecpbase = 0;
 static struct parport_config *pport = NULL;
+static struct xpcu_s *xpcu = NULL;
 static FILE *modulesfp = NULL;
 static FILE *baseaddrfp = NULL;
 static int baseaddrnum = 0;
 static int modules_read = 0;
-static struct usb_bus *busses = NULL;
-static struct usb_device *usbdevice;
-static usb_dev_handle *usb_devhandle = NULL;
-static int usbinterface = -1;
-static int usbalternate = -1;
 static unsigned long card_type;
 static int ints_enabled = 0;
 static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
@@ -75,198 +72,6 @@ void hexdump(unsigned char *buf, int len) {
 	fprintf(stderr,"\n");
 }
 
-static int usb_deviceinfo(unsigned char *buf) {
-	int i,j,k,l;
-	int len = 0;
-	WDU_CONFIGURATION **pConfigs, **pActiveConfig;
-	WDU_INTERFACE **pActiveInterface;
-
-	if (buf) {
-		struct usb_device_info *udi = (struct usb_device_info*)(buf+len);
-
-		udi->Descriptor.bLength = sizeof(WDU_DEVICE_DESCRIPTOR);
-		udi->Descriptor.bDescriptorType = usbdevice->descriptor.bDescriptorType;
-		udi->Descriptor.bcdUSB = usbdevice->descriptor.bcdUSB;
-		udi->Descriptor.bDeviceClass = usbdevice->descriptor.bDeviceClass;
-		udi->Descriptor.bDeviceSubClass = usbdevice->descriptor.bDeviceSubClass;
-		udi->Descriptor.bDeviceProtocol = usbdevice->descriptor.bDeviceProtocol;
-		udi->Descriptor.bMaxPacketSize0 = usbdevice->descriptor.bMaxPacketSize0;
-		udi->Descriptor.idVendor = usbdevice->descriptor.idVendor;
-		udi->Descriptor.idProduct = usbdevice->descriptor.idProduct;
-		udi->Descriptor.bcdDevice = usbdevice->descriptor.bcdDevice;
-		udi->Descriptor.iManufacturer = usbdevice->descriptor.iManufacturer;
-		udi->Descriptor.iProduct = usbdevice->descriptor.iProduct;
-		udi->Descriptor.iSerialNumber = usbdevice->descriptor.iSerialNumber;
-		udi->Descriptor.bNumConfigurations = usbdevice->descriptor.bNumConfigurations;
-
-		/* TODO: Fix Pipe0! */
-		udi->Pipe0.dwNumber = 0x00;
-		udi->Pipe0.dwMaximumPacketSize = usbdevice->descriptor.bMaxPacketSize0;
-		udi->Pipe0.type = 0;
-		udi->Pipe0.direction = WDU_DIR_IN_OUT;
-		udi->Pipe0.dwInterval = 0;
-
-		pConfigs = &(udi->pConfigs);
-		pActiveConfig = &(udi->pActiveConfig);
-		pActiveInterface = &(udi->pActiveInterface[0]);
-	}
-
-	len = sizeof(struct usb_device_info);
-
-	for (i=0; i<usbdevice->descriptor.bNumConfigurations; i++)
-	{
-		struct usb_config_descriptor *conf_desc = &usbdevice->config[i];
-		WDU_INTERFACE **pInterfaces;
-		WDU_ALTERNATE_SETTING **pAlternateSettings[conf_desc->bNumInterfaces];
-		WDU_ALTERNATE_SETTING **pActiveAltSetting[conf_desc->bNumInterfaces];
-
-		if (buf) {
-			WDU_CONFIGURATION *cfg = (WDU_CONFIGURATION*)(buf+len);
-
-			*pConfigs = cfg;
-			*pActiveConfig = cfg;
-
-			cfg->Descriptor.bLength = conf_desc->bLength;
-			cfg->Descriptor.bDescriptorType = conf_desc->bDescriptorType;
-			cfg->Descriptor.wTotalLength = conf_desc->wTotalLength;
-			cfg->Descriptor.bNumInterfaces = conf_desc->bNumInterfaces;
-			cfg->Descriptor.bConfigurationValue = conf_desc->bConfigurationValue;
-			cfg->Descriptor.iConfiguration = conf_desc->iConfiguration;
-			cfg->Descriptor.bmAttributes = conf_desc->bmAttributes;
-			cfg->Descriptor.MaxPower = conf_desc->MaxPower;
-
-			cfg->dwNumInterfaces = conf_desc->bNumInterfaces;
-
-			pInterfaces = &(cfg->pInterfaces);
-		}
-		len += sizeof(WDU_CONFIGURATION);
-
-		if (buf) {
-			*pInterfaces = (WDU_INTERFACE*)(buf+len);
-			for (j=0; j<conf_desc->bNumInterfaces; j++) {
-				WDU_INTERFACE *iface = (WDU_INTERFACE*)(buf+len);
-
-				pActiveInterface[j] = iface;
-
-				pAlternateSettings[j] = &(iface->pAlternateSettings);
-				iface->dwNumAltSettings = usbdevice->config[i].interface[j].num_altsetting;
-				pActiveAltSetting[j] = &(iface->pActiveAltSetting);
-
-				len += sizeof(WDU_INTERFACE);
-			}
-		} else {
-			len += sizeof(WDU_INTERFACE) * conf_desc->bNumInterfaces;
-		}
-
-		for (j=0; j<conf_desc->bNumInterfaces; j++)
-		{
-			struct usb_interface *interface = &usbdevice->config[i].interface[j];
-
-			if (buf) {
-				*pAlternateSettings[j] = (WDU_ALTERNATE_SETTING*)(buf+len);
-				/* FIXME: */
-				*pActiveAltSetting[j] = (WDU_ALTERNATE_SETTING*)(buf+len);
-			}
-
-			for(k=0; k<interface->num_altsetting; k++)
-			{
-				unsigned char bNumEndpoints = interface->altsetting[k].bNumEndpoints;
-				WDU_ENDPOINT_DESCRIPTOR **pEndpointDescriptors;
-				WDU_PIPE_INFO **pPipes;
-
-				if (buf) {
-					WDU_ALTERNATE_SETTING *altset = (WDU_ALTERNATE_SETTING*)(buf+len);
-
-					altset->Descriptor.bLength = interface->altsetting[k].bLength;
-					altset->Descriptor.bDescriptorType = interface->altsetting[k].bDescriptorType;
-					altset->Descriptor.bInterfaceNumber = interface->altsetting[k].bInterfaceNumber;
-					altset->Descriptor.bAlternateSetting = interface->altsetting[k].bAlternateSetting;
-					altset->Descriptor.bNumEndpoints = interface->altsetting[k].bNumEndpoints;
-					altset->Descriptor.bInterfaceClass = interface->altsetting[k].bInterfaceClass;
-					altset->Descriptor.bInterfaceSubClass = interface->altsetting[k].bInterfaceSubClass;
-					altset->Descriptor.bInterfaceProtocol = interface->altsetting[k].bInterfaceProtocol;
-					altset->Descriptor.iInterface = interface->altsetting[k].iInterface;
-					pEndpointDescriptors = &(altset->pEndpointDescriptors);
-					pPipes = &(altset->pPipes);
-
-				}
-				len +=sizeof(WDU_ALTERNATE_SETTING);
-
-				if (buf) {
-					*pEndpointDescriptors = (WDU_ENDPOINT_DESCRIPTOR*)(buf+len);
-					for (l = 0; l < bNumEndpoints; l++) {
-						WDU_ENDPOINT_DESCRIPTOR *ed = (WDU_ENDPOINT_DESCRIPTOR*)(buf+len);
-
-						ed->bLength = interface->altsetting[k].endpoint[l].bLength;
-						ed->bDescriptorType = interface->altsetting[k].endpoint[l].bDescriptorType;
-						ed->bEndpointAddress = interface->altsetting[k].endpoint[l].bEndpointAddress;
-						ed->bmAttributes = interface->altsetting[k].endpoint[l].bmAttributes;
-						ed->wMaxPacketSize = interface->altsetting[k].endpoint[l].wMaxPacketSize;
-						ed->bInterval = interface->altsetting[k].endpoint[l].bInterval;
-
-						len += sizeof(WDU_ENDPOINT_DESCRIPTOR);
-					}
-						
-					*pPipes = (WDU_PIPE_INFO*)(buf+len);
-					for (l = 0; l < bNumEndpoints; l++) {
-						WDU_PIPE_INFO *pi = (WDU_PIPE_INFO*)(buf+len);
-
-						pi->dwNumber = interface->altsetting[k].endpoint[l].bEndpointAddress;
-						pi->dwMaximumPacketSize = WDU_GET_MAX_PACKET_SIZE(interface->altsetting[k].endpoint[l].wMaxPacketSize);
-						pi->type = interface->altsetting[k].endpoint[l].bmAttributes & USB_ENDPOINT_TYPE_MASK;
-						if (pi->type == PIPE_TYPE_CONTROL)
-							pi->direction = WDU_DIR_IN_OUT;
-						else
-						{
-							pi->direction = interface->altsetting[k].endpoint[l].bEndpointAddress & USB_ENDPOINT_DIR_MASK ?  WDU_DIR_IN : WDU_DIR_OUT;
-						}
-
-						pi->dwInterval = interface->altsetting[k].endpoint[l].bInterval;
-
-						len += sizeof(WDU_PIPE_INFO);
-					}
-				} else {
-					len +=(sizeof(WDU_ENDPOINT_DESCRIPTOR)+sizeof(WDU_PIPE_INFO))*bNumEndpoints;
-				}
-			}
-		}
-	}
-
-	return len;
-}
-
-static int usb_claim(int claim) {
-	int ret = 0;
-	static int claimed = 0;
-
-	if (usbinterface < 0)
-		return -1;
-	
-	if (claim) {
-		if (claimed)
-			return 0;
-
-		ret = usb_claim_interface(usb_devhandle, usbinterface);
-		if (!ret) {
-			claimed = 1;
-			ret = usb_set_altinterface(usb_devhandle, usbalternate);
-			if (ret)
-				fprintf(stderr, "usb_set_altinterface: %d\n", ret);
-		} else {
-			fprintf(stderr, "usb_claim_interface: %d -> %d (%s)\n",
-					usbinterface, ret, usb_strerror());
-		}
-	} else {
-		if (!claimed)
-			return 0;
-
-		ret = usb_release_interface(usb_devhandle, usbinterface);
-		if (!ret)
-			claimed = 0;
-	}
-
-	return ret;
-}
 
 static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 	struct header_struct* wdheader = (struct header_struct*)wdioctl;
@@ -355,7 +160,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				usb_claim(1);
+				xpcu_claim(xpcu, XPCU_CLAIM);
 				/* http://www.jungo.com/support/documentation/windriver/802/wdusb_man_mhtml/node55.html#SECTION001213000000000000000 */
 				if (ut->dwPipeNum == 0) { /* control pipe */
 					int requesttype, request, value, index, size;
@@ -365,14 +170,14 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					index = ut->SetupPacket[4] | (ut->SetupPacket[5] << 8);
 					size = ut->SetupPacket[6] | (ut->SetupPacket[7] << 8);
 					DPRINTF("requesttype: %x, request: %x, value: %u, index: %u, size: %u\n", requesttype, request, value, index, size);
-					ret = usb_control_msg(usb_devhandle, requesttype, request, value, index, ut->pBuffer, size, ut->dwTimeout);
+					ret = usb_control_msg(xpcu->handle, requesttype, request, value, index, ut->pBuffer, size, ut->dwTimeout);
 				} else {
 					if (ut->fRead) {
-						ret = usb_bulk_read(usb_devhandle, ut->dwPipeNum, ut->pBuffer, ut->dwBufferSize, ut->dwTimeout);
+						ret = usb_bulk_read(xpcu->handle, ut->dwPipeNum, ut->pBuffer, ut->dwBufferSize, ut->dwTimeout);
 					} else {
-						ret = usb_bulk_write(usb_devhandle, ut->dwPipeNum, ut->pBuffer, ut->dwBufferSize, ut->dwTimeout);
+						ret = usb_bulk_write(xpcu->handle, ut->dwPipeNum, ut->pBuffer, ut->dwBufferSize, ut->dwTimeout);
 					}
-					usb_claim(0);
+					xpcu_claim(xpcu, XPCU_RELEASE);
 				}
 
 				if (ret < 0) {
@@ -449,19 +254,19 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				if (usbdevice) {
-					if (!usb_devhandle) {
-						usb_devhandle = usb_open(usbdevice);
+				if (xpcu->dev) {
+					if (!xpcu->handle) {
+						xpcu->handle = usb_open(xpcu->dev);
 #ifndef NO_USB_RESET
-						if (usb_devhandle) {
-							usb_reset(usb_devhandle);
-							usb_devhandle = usb_open(usbdevice);
+						if (xpcu->handle) {
+							usb_reset(xpcu->handle);
+							xpcu->handle = usb_open(xpcu->dev);
 						}
 #endif
 					}
 
-					usbinterface = usbdevice->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber;
-					usbalternate = usi->dwAlternateSetting;
+					xpcu->interface = xpcu->dev->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber;
+					xpcu->alternate = usi->dwAlternateSetting;
 				}
 #endif
 				DPRINTF("unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n",
@@ -483,11 +288,11 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 
 				pSize = ugdd->dwBytes;
 				if (!ugdd->dwBytes) {
-					if (usbdevice) {
-						ugdd->dwBytes = usb_deviceinfo(NULL);
+					if (xpcu->dev) {
+						ugdd->dwBytes = xpcu_deviceinfo(xpcu, NULL);
 					}
 				} else {
-					usb_deviceinfo((unsigned char*)ugdd->pBuf);
+					xpcu_deviceinfo(xpcu, (unsigned char*)ugdd->pBuf);
 				}
 			}
 			break;
@@ -553,7 +358,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 					e->matchTables[i].bInterfaceSubClass,
 					e->matchTables[i].bInterfaceProtocol);
 
-					for (bus = busses; bus; bus = bus->next) {
+					for (bus = xpcu->busses; bus; bus = bus->next) {
 						struct usb_device *dev;
 
 						if ((devnum != -1) && (strtol(bus->dirname, NULL, 10) != busnum))
@@ -583,7 +388,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 												   (interface->altsetting[ai].bInterfaceProtocol == e->matchTables[i].bInterfaceProtocol)){
 											   /* TODO: check interfaceClass! */
 											   DPRINTF("found device with libusb\n");
-											   usbdevice = dev;
+											   xpcu->dev = dev;
 											   card_type = e->dwCardType;
 										   }
 									   }
@@ -670,7 +475,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				if (usbdevice) {
+				if (xpcu->dev) {
 					if (it->dwCounter == 0) {
 						it->dwCounter = 1;
 					} else {
@@ -742,17 +547,17 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				if (usbdevice) {
-					struct usb_interface *interface = usbdevice->config->interface;
+				if (xpcu->dev) {
+					struct usb_interface *interface = xpcu->dev->config->interface;
 
 					e->dwCardType = card_type;
 					e->dwAction = 1;
 					e->dwEventId = 109;
 					e->u.Usb.dwUniqueID = 110;
-					e->matchTables[0].VendorId = usbdevice->descriptor.idVendor;
-					e->matchTables[0].ProductId = usbdevice->descriptor.idProduct;
-					e->matchTables[0].bDeviceClass = usbdevice->descriptor.bDeviceClass;
-					e->matchTables[0].bDeviceSubClass = usbdevice->descriptor.bDeviceSubClass;
+					e->matchTables[0].VendorId = xpcu->dev->descriptor.idVendor;
+					e->matchTables[0].ProductId = xpcu->dev->descriptor.idProduct;
+					e->matchTables[0].bDeviceClass = xpcu->dev->descriptor.bDeviceClass;
+					e->matchTables[0].bDeviceSubClass = xpcu->dev->descriptor.bDeviceSubClass;
 					e->matchTables[0].bInterfaceClass = interface->altsetting[0].bInterfaceClass;
 					e->matchTables[0].bInterfaceSubClass = interface->altsetting[0].bInterfaceSubClass;
 					e->matchTables[0].bInterfaceProtocol = interface->altsetting[0].bInterfaceProtocol;
@@ -835,13 +640,8 @@ int open (const char *pathname, int flags, ...) {
 #else
 		windrvrfd = fd = (*func) (pathname, flags, mode);
 #endif
-		if (!busses) {
-			usb_init();
-			usb_find_busses();
-			usb_find_devices();
-
-			busses = usb_get_busses();
-		}
+		if (!xpcu)
+			xpcu = xpcu_open();
 
 		return fd;
 	}
@@ -858,13 +658,14 @@ int close(int fd) {
 	if (fd == windrvrfd && windrvrfd >= 0) {
 		DPRINTF("close windrvrfd\n");
 
-		if (usb_devhandle) {
-			usb_claim(0);
-			usb_close(usb_devhandle);
+		if (xpcu->handle) {
+			xpcu_claim(xpcu, XPCU_RELEASE);
+			usb_close(xpcu->handle);
 		}
 
-		usb_devhandle = NULL;
-		usbinterface = -1;
+		xpcu->handle = NULL;
+		xpcu->interface = -1;
+		xpcu = NULL;
 		windrvrfd = -1;
 	}
 
