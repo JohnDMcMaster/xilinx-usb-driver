@@ -232,6 +232,23 @@ int xpcu_transfer(struct xpcu_s *xpcu, struct usb_transfer *ut) {
 	return ret;
 }
 
+void xpcu_set_interface(struct xpcu_s *xpcu, struct usb_set_interface *usi) {
+	if (xpcu->dev) {
+		if (!xpcu->handle) {
+			xpcu->handle = usb_open(xpcu->dev);
+#ifndef NO_USB_RESET
+			if (xpcu->handle) {
+				usb_reset(xpcu->handle);
+				xpcu->handle = usb_open(xpcu->dev);
+			}
+#endif
+		}
+
+		xpcu->interface = xpcu->dev->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber;
+		xpcu->alternate = usi->dwAlternateSetting;
+	}
+}
+
 struct xpcu_s *xpcu_open(void) {
 	static struct xpcu_s xpcu;
 

@@ -229,20 +229,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				if (xpcu->dev) {
-					if (!xpcu->handle) {
-						xpcu->handle = usb_open(xpcu->dev);
-#ifndef NO_USB_RESET
-						if (xpcu->handle) {
-							usb_reset(xpcu->handle);
-							xpcu->handle = usb_open(xpcu->dev);
-						}
-#endif
-					}
-
-					xpcu->interface = xpcu->dev->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber;
-					xpcu->alternate = usi->dwAlternateSetting;
-				}
+				xpcu_set_interface(xpcu, usi);
 #endif
 				DPRINTF("unique: %lu, interfacenum: %lu, alternatesetting: %lu, options: %lx\n",
 				usi->dwUniqueID, usi->dwInterfaceNum,
