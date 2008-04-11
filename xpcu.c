@@ -1,16 +1,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <strings.h>
 #include <usb.h>
+#include <errno.h>
 #include "usb-driver.h"
 #include "xpcu.h"
 
-int xpcu_deviceinfo(struct xpcu_s *xpcu, unsigned char *buf) {
+static struct usb_bus *busses = NULL;
+
+int xpcu_deviceinfo(struct xpcu_s *xpcu, struct usb_get_device_data *ugdd) {
 	int i,j,k,l;
 	int len = 0;
+	unsigned char *buf = NULL;
 	WDU_CONFIGURATION **pConfigs, **pActiveConfig;
 	WDU_INTERFACE **pActiveInterface;
+
+	if (ugdd->dwUniqueID != (unsigned long)xpcu)
+		return -ENODEV;
+
+	if (ugdd->dwBytes)
+		buf = ugdd->pBuf;
 
 	if (buf) {
 		struct usb_device_info *udi = (struct usb_device_info*)(buf+len);
@@ -202,6 +213,9 @@ static int xpcu_claim(struct xpcu_s *xpcu, int claim) {
 int xpcu_transfer(struct xpcu_s *xpcu, struct usb_transfer *ut) {
 	int ret = 0;
 
+	if (ut->dwUniqueID != (unsigned long)xpcu)
+		return -ENODEV;
+
 	xpcu_claim(xpcu, XPCU_CLAIM);
 	/* http://www.jungo.com/support/documentation/windriver/802/wdusb_man_mhtml/node55.html#SECTION001213000000000000000 */
 	if (ut->dwPipeNum == 0) { /* control pipe */
@@ -233,6 +247,9 @@ int xpcu_transfer(struct xpcu_s *xpcu, struct usb_transfer *ut) {
 }
 
 void xpcu_set_interface(struct xpcu_s *xpcu, struct usb_set_interface *usi) {
+	if (usi->dwUniqueID != (unsigned long)xpcu)
+		return;
+
 	if (xpcu->dev) {
 		if (!xpcu->handle) {
 			xpcu->handle = usb_open(xpcu->dev);
@@ -249,29 +266,150 @@ void xpcu_set_interface(struct xpcu_s *xpcu, struct usb_set_interface *usi) {
 	}
 }
 
-struct xpcu_s *xpcu_open(void) {
-	static struct xpcu_s xpcu;
-
-	bzero(&xpcu, sizeof(xpcu));
-	xpcu.interface = -1;
-	xpcu.alternate = -1;
+static void xpcu_init(void) {
+	if (busses)
+		return;
 
 	usb_init();
 	usb_find_busses();
 	usb_find_devices();
 
-	xpcu.busses = usb_get_busses();
+	busses = usb_get_busses();
+}
+
+
+struct xpcu_s *xpcu_find(struct event *e) {
+	static struct xpcu_s xpcu;
+	char* devpos;
+	struct usb_bus *bus;
+	int busnum = -1, devnum = -1;
+	int i;
+
+	bzero(&xpcu, sizeof(xpcu));
+	xpcu.interface = -1;
+	xpcu.alternate = -1;
+
+	xpcu_init();
+
+	devpos = getenv("XILINX_USB_DEV");
+	if (devpos != NULL) {
+		int j;
+		char *devstr = NULL, *remainder;
+
+		DPRINTF("XILINX_USB_DEV=%s\n", devpos);
+
+		for (j = 0; j < strlen(devpos) && devpos[j] != 0; j++) {
+			if (devpos[j] == ':') {
+				devpos[j] = 0;
+				devstr = &(devpos[j+1]);
+			}
+		}
+
+		if (devstr && strlen(devstr) > 0) {
+			busnum = strtol(devpos, &remainder, 10);
+			if (devpos == remainder) {
+				busnum = -1;
+			} else {
+				devnum = strtol(devstr, &remainder, 10);
+				if (devstr == remainder) {
+					busnum = -1;
+					devnum = -1;
+				} else {
+					fprintf(stderr,"Using XILINX platform cable USB at %03d:%03d\n",
+							busnum, devnum);
+				}
+			}
+		}
+	}
+
+	for (i = 0; i < e->dwNumMatchTables; i++) {
+
+		DPRINTF("match: dev: %04x:%04x, class: %x, subclass: %x, intclass: %x, intsubclass: %x, intproto: %x\n",
+				e->matchTables[i].VendorId,
+				e->matchTables[i].ProductId,
+				e->matchTables[i].bDeviceClass,
+				e->matchTables[i].bDeviceSubClass,
+				e->matchTables[i].bInterfaceClass,
+				e->matchTables[i].bInterfaceSubClass,
+				e->matchTables[i].bInterfaceProtocol);
+
+		for (bus = busses; bus; bus = bus->next) {
+			struct usb_device *dev;
+
+			if ((devnum != -1) && (strtol(bus->dirname, NULL, 10) != busnum))
+				continue;
+
+			for (dev = bus->devices; dev; dev = dev->next) {
+				struct usb_device_descriptor *desc = &(dev->descriptor);
+
+				if((desc->idVendor == e->matchTables[i].VendorId) &&
+						(desc->idProduct == e->matchTables[i].ProductId) &&
+						(desc->bDeviceClass == e->matchTables[i].bDeviceClass) &&
+						(desc->bDeviceSubClass == e->matchTables[i].bDeviceSubClass) &&
+						((devnum == -1) || (strtol(dev->filename, NULL, 10) == devnum)) ) {
+					int ac;
+					for (ac = 0; ac < desc->bNumConfigurations; ac++) {
+						struct usb_interface *interface = dev->config[ac].interface;
+						int ai;
+
+						for (ai = 0; ai < interface->num_altsetting; ai++) {
+
+							DPRINTF("intclass: %x, intsubclass: %x, intproto: %x\n",
+									interface->altsetting[i].bInterfaceClass,
+									interface->altsetting[i].bInterfaceSubClass,
+									interface->altsetting[i].bInterfaceProtocol);
+
+							if ((interface->altsetting[ai].bInterfaceSubClass == e->matchTables[i].bInterfaceSubClass) &&
+									(interface->altsetting[ai].bInterfaceProtocol == e->matchTables[i].bInterfaceProtocol)){
+								/* TODO: check interfaceClass! */
+								DPRINTF("found device with libusb\n");
+								xpcu.dev = dev;
+								xpcu.card_type = e->dwCardType;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if (!xpcu.dev)
+		return NULL;
 
 	return &xpcu;
 }
 
-void xpcu_close(struct xpcu_s *xpcu) {
-	if (xpcu->handle) {
-		xpcu_claim(xpcu, XPCU_RELEASE);
-		usb_close(xpcu->handle);
-	}
+void xpcu_found(struct xpcu_s *xpcu, struct event *e) {
+	if (e->handle && e->handle == (unsigned long)xpcu && xpcu->dev) {
+		struct usb_interface *interface = xpcu->dev->config->interface;
 
-	xpcu->handle = NULL;
-	xpcu->interface = -1;
-	xpcu->alternate = -1;
+		e->dwCardType = xpcu->card_type;
+		e->dwAction = 1;
+		e->dwEventId = 1;
+		e->u.Usb.dwUniqueID = e->handle;
+		e->matchTables[0].VendorId = xpcu->dev->descriptor.idVendor;
+		e->matchTables[0].ProductId = xpcu->dev->descriptor.idProduct;
+		e->matchTables[0].bDeviceClass = xpcu->dev->descriptor.bDeviceClass;
+		e->matchTables[0].bDeviceSubClass = xpcu->dev->descriptor.bDeviceSubClass;
+		e->matchTables[0].bInterfaceClass = interface->altsetting[0].bInterfaceClass;
+		e->matchTables[0].bInterfaceSubClass = interface->altsetting[0].bInterfaceSubClass;
+		e->matchTables[0].bInterfaceProtocol = interface->altsetting[0].bInterfaceProtocol;
+	}
+}
+
+void xpcu_close(struct xpcu_s *xpcu, struct event *e) {
+	if (e->handle != (unsigned long)xpcu)
+		return;
+
+	if(xpcu) {
+		if (xpcu->handle) {
+			xpcu_claim(xpcu, XPCU_RELEASE);
+			usb_close(xpcu->handle);
+		}
+
+		xpcu->handle = NULL;
+		xpcu->interface = -1;
+		xpcu->alternate = -1;
+		busses = NULL;
+	}
 }
