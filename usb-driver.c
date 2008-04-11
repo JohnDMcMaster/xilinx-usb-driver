@@ -55,7 +55,6 @@ static FILE *modulesfp = NULL;
 static FILE *baseaddrfp = NULL;
 static int baseaddrnum = 0;
 static int modules_read = 0;
-static unsigned long card_type;
 static int ints_enabled = 0;
 static pthread_mutex_t int_wait = PTHREAD_MUTEX_INITIALIZER;
 
@@ -351,7 +350,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 											   /* TODO: check interfaceClass! */
 											   DPRINTF("found device with libusb\n");
 											   xpcu->dev = dev;
-											   card_type = e->dwCardType;
+											   xpcu->card_type = e->dwCardType;
 										   }
 									   }
 								   }
@@ -512,7 +511,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				if (xpcu->dev) {
 					struct usb_interface *interface = xpcu->dev->config->interface;
 
-					e->dwCardType = card_type;
+					e->dwCardType = xpcu->card_type;
 					e->dwAction = 1;
 					e->dwEventId = 109;
 					e->u.Usb.dwUniqueID = 110;

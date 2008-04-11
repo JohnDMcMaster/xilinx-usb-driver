@@ -7,6 +7,7 @@ struct xpcu_s {
 	struct usb_bus *busses;
 	int interface;
 	int alternate;
+	unsigned long card_type;
 };
 
 int __attribute__ ((visibility ("hidden"))) xpcu_deviceinfo(struct xpcu_s *xpcu, unsigned char *buf);
