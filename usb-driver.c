@@ -156,7 +156,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				xpcu_transfer(xpcu, ut);
+				ret = xpcu_transfer(xpcu, ut);
 #endif
 
 #ifdef DEBUG
@@ -184,7 +184,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				xpcu_int_state(xpcu, it, ENABLE_INTERRUPT);
+				ret = xpcu_int_state(xpcu, it, ENABLE_INTERRUPT);
 #endif
 
 				DPRINTF("<- Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
@@ -207,7 +207,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				xpcu_int_state(xpcu, it, DISABLE_INTERRUPT);
+				ret = xpcu_int_state(xpcu, it, DISABLE_INTERRUPT);
 #endif
 				DPRINTF("<- Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
 				it->hInterrupt, it->dwOptions,
@@ -227,7 +227,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				xpcu_set_interface(xpcu, usi);
+				ret = xpcu_set_interface(xpcu, usi);
 #endif
 				DPRINTF("<- unique: 0x%lx, interfacenum: %lu, alternatesetting: %lu, options: %lx\n",
 				usi->dwUniqueID, usi->dwInterfaceNum,
@@ -245,7 +245,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ugdd->dwUniqueID, ugdd->dwBytes,
 				ugdd->dwOptions);
 
-				ugdd->dwBytes = xpcu_deviceinfo(xpcu, ugdd);
+				ret = xpcu_deviceinfo(xpcu, ugdd);
 
 			}
 			break;
@@ -333,7 +333,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				xpcu_close(xpcu, e);
+				ret = xpcu_close(xpcu, e);
 #endif
 			}
 			break;
@@ -351,7 +351,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				xpcu_int_wait(xpcu, it);
+				ret = xpcu_int_wait(xpcu, it);
 #endif
 
 				DPRINTF("<- INT_WAIT_RETURN: Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
@@ -413,7 +413,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				xpcu_found(xpcu, e);
+				ret = xpcu_found(xpcu, e);
 #endif
 
 #ifdef DEBUG

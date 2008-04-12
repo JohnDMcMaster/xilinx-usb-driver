@@ -15,9 +15,9 @@ struct xpcu_s {
 
 int __attribute__ ((visibility ("hidden"))) xpcu_deviceinfo(struct xpcu_s *xpcu, struct usb_get_device_data *ugdd);
 int __attribute__ ((visibility ("hidden"))) xpcu_transfer(struct xpcu_s *xpcu, struct usb_transfer *ut);
-void __attribute__ ((visibility ("hidden"))) xpcu_set_interface(struct xpcu_s *xpcu, struct usb_set_interface *usi);
+int __attribute__ ((visibility ("hidden"))) xpcu_set_interface(struct xpcu_s *xpcu, struct usb_set_interface *usi);
 struct xpcu_s __attribute__ ((visibility ("hidden"))) *xpcu_find(struct event *e);
-void __attribute__ ((visibility ("hidden"))) xpcu_found(struct xpcu_s *xpcu, struct event *e);
-void __attribute__ ((visibility ("hidden"))) xpcu_close(struct xpcu_s *xpcu, struct event *e);
-void __attribute__ ((visibility ("hidden"))) xpcu_int_state(struct xpcu_s *xpcu, struct interrupt *it, int enable);
-void __attribute__ ((visibility ("hidden"))) xpcu_int_wait(struct xpcu_s *xpcu, struct interrupt *it);
+int __attribute__ ((visibility ("hidden"))) xpcu_found(struct xpcu_s *xpcu, struct event *e);
+int __attribute__ ((visibility ("hidden"))) xpcu_close(struct xpcu_s *xpcu, struct event *e);
+int __attribute__ ((visibility ("hidden"))) xpcu_int_state(struct xpcu_s *xpcu, struct interrupt *it, int enable);
+int __attribute__ ((visibility ("hidden"))) xpcu_int_wait(struct xpcu_s *xpcu, struct interrupt *it);

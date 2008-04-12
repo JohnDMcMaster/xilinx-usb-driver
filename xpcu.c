@@ -21,6 +21,9 @@ int xpcu_deviceinfo(struct xpcu_s *xpcu, struct usb_get_device_data *ugdd) {
 
 	if (ugdd->dwUniqueID != (unsigned long)xpcu)
 		return -ENODEV;
+	
+	if (!xpcu)
+		return -ENODEV;
 
 	if (ugdd->dwBytes)
 		buf = ugdd->pBuf;
@@ -176,7 +179,9 @@ int xpcu_deviceinfo(struct xpcu_s *xpcu, struct usb_get_device_data *ugdd) {
 		}
 	}
 
-	return len;
+	ugdd->dwBytes = len;
+
+	return 0;
 }
 
 static int xpcu_claim(struct xpcu_s *xpcu, int claim) {
@@ -217,6 +222,9 @@ int xpcu_transfer(struct xpcu_s *xpcu, struct usb_transfer *ut) {
 
 	if (ut->dwUniqueID != (unsigned long)xpcu)
 		return -ENODEV;
+	
+	if (!xpcu)
+		return -ENODEV;
 
 	xpcu_claim(xpcu, XPCU_CLAIM);
 	/* http://www.jungo.com/support/documentation/windriver/802/wdusb_man_mhtml/node55.html#SECTION001213000000000000000 */
@@ -248,9 +256,12 @@ int xpcu_transfer(struct xpcu_s *xpcu, struct usb_transfer *ut) {
 	return ret;
 }
 
-void xpcu_set_interface(struct xpcu_s *xpcu, struct usb_set_interface *usi) {
+int xpcu_set_interface(struct xpcu_s *xpcu, struct usb_set_interface *usi) {
 	if (usi->dwUniqueID != (unsigned long)xpcu)
-		return;
+		return -ENODEV;
+	
+	if (!xpcu)
+		return -ENODEV;
 
 	if (xpcu->dev) {
 		if (!xpcu->handle) {
@@ -266,6 +277,8 @@ void xpcu_set_interface(struct xpcu_s *xpcu, struct usb_set_interface *usi) {
 		xpcu->interface = xpcu->dev->config[0].interface[usi->dwInterfaceNum].altsetting[usi->dwAlternateSetting].bInterfaceNumber;
 		xpcu->alternate = usi->dwAlternateSetting;
 	}
+
+	return 0;
 }
 
 static void xpcu_init(void) {
@@ -385,7 +398,7 @@ struct xpcu_s *xpcu_find(struct event *e) {
 	return &xpcu;
 }
 
-void xpcu_found(struct xpcu_s *xpcu, struct event *e) {
+int xpcu_found(struct xpcu_s *xpcu, struct event *e) {
 	if (e->handle && e->handle == (unsigned long)xpcu && xpcu->dev) {
 		struct usb_interface *interface = xpcu->dev->config->interface;
 
@@ -401,11 +414,16 @@ void xpcu_found(struct xpcu_s *xpcu, struct event *e) {
 		e->matchTables[0].bInterfaceSubClass = interface->altsetting[0].bInterfaceSubClass;
 		e->matchTables[0].bInterfaceProtocol = interface->altsetting[0].bInterfaceProtocol;
 	}
+
+	return 0;
 }
 
-void xpcu_close(struct xpcu_s *xpcu, struct event *e) {
+int xpcu_close(struct xpcu_s *xpcu, struct event *e) {
 	if (e->handle != (unsigned long)xpcu)
-		return;
+		return -ENODEV;
+	
+	if (!xpcu)
+		return -ENODEV;
 
 	if(xpcu) {
 		if (xpcu->handle) {
@@ -418,13 +436,15 @@ void xpcu_close(struct xpcu_s *xpcu, struct event *e) {
 		xpcu->alternate = -1;
 		busses = NULL;
 	}
+
+	return 0;
 }
 
-void xpcu_int_state(struct xpcu_s *xpcu, struct interrupt *it, int enable) {
+int xpcu_int_state(struct xpcu_s *xpcu, struct interrupt *it, int enable) {
 	static pthread_mutex_t *interrupt = &dummy_interrupt;
 
 	if (it->hInterrupt != (unsigned long)xpcu)
-		return;
+		return -ENODEV;
 	
 	if (xpcu)
 		interrupt = &xpcu->interrupt;
@@ -439,11 +459,13 @@ void xpcu_int_state(struct xpcu_s *xpcu, struct interrupt *it, int enable) {
 		if (pthread_mutex_trylock(interrupt) == EBUSY)
 			pthread_mutex_unlock(interrupt);
 	}
+
+	return 0;
 }
 
-void xpcu_int_wait(struct xpcu_s *xpcu, struct interrupt *it) {
+int xpcu_int_wait(struct xpcu_s *xpcu, struct interrupt *it) {
 	if (it->hInterrupt != (unsigned long)xpcu)
-		return;
+		return -ENODEV;
 	
 	if (xpcu) {
 		if (it->dwCounter == 0) {
@@ -456,4 +478,6 @@ void xpcu_int_wait(struct xpcu_s *xpcu, struct interrupt *it) {
 		pthread_mutex_lock(&dummy_interrupt);
 		pthread_mutex_unlock(&dummy_interrupt);
 	}
+
+	return 0;
 }
