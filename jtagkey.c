@@ -293,10 +293,8 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		pthread_join(reader_thread, NULL);
 
 #ifdef DEBUG
-		DPRINTF("write: ");
-		hexdump(writebuf, writepos-writebuf);
-		DPRINTF("read: ");
-		hexdump(readbuf, i);
+		hexdump(writebuf, writepos-writebuf, "->");
+		hexdump(readbuf, i, "<-");
 #endif
 
 		writepos = writebuf;

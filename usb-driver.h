@@ -44,7 +44,7 @@
 #define DPRINTF(format, args...)
 #endif
 
-void __attribute__ ((visibility ("hidden"))) hexdump(unsigned char *buf, int len);
+void __attribute__ ((visibility ("hidden"))) hexdump(unsigned char *buf, int len, char *prefix);
 
 #define WDU_GET_MAX_PACKET_SIZE(x)                ((unsigned short) (((x) & 0x7ff) * (1 + (((x) & 0x1800) >> 11))))
 

@@ -56,13 +56,14 @@ static int modules_read = 0;
 
 #define NO_WINDRVR 1
 
-void hexdump(unsigned char *buf, int len) {
+void hexdump(unsigned char *buf, int len, char *prefix) {
 	int i;
 
+	fprintf(stderr, "%s ", prefix);
 	for(i=0; i<len; i++) {
 		fprintf(stderr,"%02x ", buf[i]);
 		if ((i % 16) == 15)
-			fprintf(stderr,"\n");
+			fprintf(stderr,"\n%s ", prefix);
 	}
 	fprintf(stderr,"\n");
 }
@@ -142,13 +143,13 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ut->dwUniqueID, ut->dwPipeNum, ut->fRead,
 				ut->dwOptions, ut->dwBufferSize, ut->dwTimeout);
 				if (ut->dwPipeNum == 0) {
-					DPRINTF("-> setup packet: ");
-					hexdump(ut->SetupPacket, 8);
+					DPRINTF("-> setup packet:");
+					hexdump(ut->SetupPacket, 8, "");
 				}
 
 				if (!ut->fRead && ut->dwBufferSize)
 				{
-					hexdump(ut->pBuffer, ut->dwBufferSize);
+					hexdump(ut->pBuffer, ut->dwBufferSize, "->");
 				}
 #endif
 
@@ -162,8 +163,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				DPRINTF("Transferred: %lu (%s)\n",ut->dwBytesTransferred, (ut->fRead?"read":"write"));
 				if (ut->fRead && ut->dwBytesTransferred)
 				{
-					DPRINTF("<- Read: ");
-					hexdump(ut->pBuffer, ut->dwBytesTransferred);
+					hexdump(ut->pBuffer, ut->dwBytesTransferred, "<-");
 				}
 #endif
 			}
