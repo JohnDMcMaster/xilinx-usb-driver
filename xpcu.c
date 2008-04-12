@@ -9,19 +9,26 @@
 #include "usb-driver.h"
 #include "xpcu.h"
 
+struct xpcu_s {
+	struct usb_device *dev;
+	usb_dev_handle *handle;
+	int interface;
+	int alternate;
+	unsigned long card_type;
+	pthread_mutex_t interrupt;
+};
+
 static struct usb_bus *busses = NULL;
 static pthread_mutex_t dummy_interrupt = PTHREAD_MUTEX_INITIALIZER;
 
-int xpcu_deviceinfo(struct xpcu_s *xpcu, struct usb_get_device_data *ugdd) {
+int xpcu_deviceinfo(struct usb_get_device_data *ugdd) {
+	struct xpcu_s *xpcu = (struct xpcu_s*)ugdd->dwUniqueID;
 	int i,j,k,l;
 	int len = 0;
 	unsigned char *buf = NULL;
 	WDU_CONFIGURATION **pConfigs, **pActiveConfig;
 	WDU_INTERFACE **pActiveInterface;
 
-	if (ugdd->dwUniqueID != (unsigned long)xpcu)
-		return -ENODEV;
-	
 	if (!xpcu)
 		return -ENODEV;
 
@@ -217,12 +224,10 @@ static int xpcu_claim(struct xpcu_s *xpcu, int claim) {
 	return ret;
 }
 
-int xpcu_transfer(struct xpcu_s *xpcu, struct usb_transfer *ut) {
+int xpcu_transfer(struct usb_transfer *ut) {
+	struct xpcu_s *xpcu = (struct xpcu_s*)ut->dwUniqueID;
 	int ret = 0;
 
-	if (ut->dwUniqueID != (unsigned long)xpcu)
-		return -ENODEV;
-	
 	if (!xpcu)
 		return -ENODEV;
 
@@ -256,10 +261,9 @@ int xpcu_transfer(struct xpcu_s *xpcu, struct usb_transfer *ut) {
 	return ret;
 }
 
-int xpcu_set_interface(struct xpcu_s *xpcu, struct usb_set_interface *usi) {
-	if (usi->dwUniqueID != (unsigned long)xpcu)
-		return -ENODEV;
-	
+int xpcu_set_interface(struct usb_set_interface *usi) {
+	struct xpcu_s *xpcu = (struct xpcu_s*)usi->dwUniqueID;
+
 	if (!xpcu)
 		return -ENODEV;
 
@@ -293,14 +297,13 @@ static void xpcu_init(void) {
 }
 
 
-struct xpcu_s *xpcu_find(struct event *e) {
-	static struct xpcu_s xpcu;
+int xpcu_find(struct event *e) {
+	struct xpcu_s *xpcu = NULL;
 	char* devpos;
 	struct usb_bus *bus;
 	int busnum = -1, devnum = -1;
 	int i;
 
-	bzero(&xpcu, sizeof(xpcu));
 	xpcu_init();
 
 	devpos = getenv("XILINX_USB_DEV");
@@ -376,11 +379,16 @@ struct xpcu_s *xpcu_find(struct event *e) {
 								/* TODO: check interfaceClass! */
 								DPRINTF("found device with libusb\n");
 
-								xpcu.interface = -1;
-								xpcu.alternate = -1;
-								xpcu.dev = dev;
-								xpcu.card_type = e->dwCardType;
-								pthread_mutex_init(&xpcu.interrupt, NULL);
+								xpcu = malloc(sizeof(struct xpcu_s));
+								if (!xpcu)
+									return -ENOMEM;
+
+								bzero(xpcu, sizeof(struct xpcu_s));
+								xpcu->interface = -1;
+								xpcu->alternate = -1;
+								xpcu->dev = dev;
+								xpcu->card_type = e->dwCardType;
+								pthread_mutex_init(&xpcu->interrupt, NULL);
 								e->handle = (unsigned long)&xpcu;
 							}
 						}
@@ -390,16 +398,15 @@ struct xpcu_s *xpcu_find(struct event *e) {
 		}
 	}
 
-	if (!xpcu.dev) {
-		e->handle = 0;
-		return NULL;
-	}
+	e->handle = (unsigned long)xpcu;
 
-	return &xpcu;
+	return 0;
 }
 
-int xpcu_found(struct xpcu_s *xpcu, struct event *e) {
-	if (e->handle && e->handle == (unsigned long)xpcu && xpcu->dev) {
+int xpcu_found(struct event *e) {
+	struct xpcu_s *xpcu = (struct xpcu_s*)e->handle;
+
+	if (xpcu && xpcu->dev) {
 		struct usb_interface *interface = xpcu->dev->config->interface;
 
 		e->dwCardType = xpcu->card_type;
@@ -418,10 +425,9 @@ int xpcu_found(struct xpcu_s *xpcu, struct event *e) {
 	return 0;
 }
 
-int xpcu_close(struct xpcu_s *xpcu, struct event *e) {
-	if (e->handle != (unsigned long)xpcu)
-		return -ENODEV;
-	
+int xpcu_close(struct event *e) {
+	struct xpcu_s *xpcu = (struct xpcu_s*)e->handle;
+
 	if (!xpcu)
 		return -ENODEV;
 
@@ -431,21 +437,17 @@ int xpcu_close(struct xpcu_s *xpcu, struct event *e) {
 			usb_close(xpcu->handle);
 		}
 
-		xpcu->handle = NULL;
-		xpcu->interface = -1;
-		xpcu->alternate = -1;
 		busses = NULL;
+		free(xpcu);
 	}
 
 	return 0;
 }
 
-int xpcu_int_state(struct xpcu_s *xpcu, struct interrupt *it, int enable) {
-	static pthread_mutex_t *interrupt = &dummy_interrupt;
+int xpcu_int_state(struct interrupt *it, int enable) {
+	struct xpcu_s *xpcu = (struct xpcu_s*)it->hInterrupt;
+	pthread_mutex_t *interrupt = &dummy_interrupt;
 
-	if (it->hInterrupt != (unsigned long)xpcu)
-		return -ENODEV;
-	
 	if (xpcu)
 		interrupt = &xpcu->interrupt;
 	
@@ -463,7 +465,9 @@ int xpcu_int_state(struct xpcu_s *xpcu, struct interrupt *it, int enable) {
 	return 0;
 }
 
-int xpcu_int_wait(struct xpcu_s *xpcu, struct interrupt *it) {
+int xpcu_int_wait(struct interrupt *it) {
+	struct xpcu_s *xpcu = (struct xpcu_s*)it->hInterrupt;
+
 	if (it->hInterrupt != (unsigned long)xpcu)
 		return -ENODEV;
 	

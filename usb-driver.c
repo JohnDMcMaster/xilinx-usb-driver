@@ -33,7 +33,6 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <stdio.h>
-#include <usb.h>
 #include <signal.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -49,7 +48,6 @@ static int windrvrfd = -1;
 static unsigned long ppbase = 0;
 static unsigned long ecpbase = 0;
 static struct parport_config *pport = NULL;
-static struct xpcu_s *xpcu = NULL;
 static FILE *modulesfp = NULL;
 static FILE *baseaddrfp = NULL;
 static int baseaddrnum = 0;
@@ -156,7 +154,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				ret = xpcu_transfer(xpcu, ut);
+				ret = xpcu_transfer(ut);
 #endif
 
 #ifdef DEBUG
@@ -184,7 +182,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				ret = xpcu_int_state(xpcu, it, ENABLE_INTERRUPT);
+				ret = xpcu_int_state(it, ENABLE_INTERRUPT);
 #endif
 
 				DPRINTF("<- Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
@@ -207,7 +205,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				ret = xpcu_int_state(xpcu, it, DISABLE_INTERRUPT);
+				ret = xpcu_int_state(it, DISABLE_INTERRUPT);
 #endif
 				DPRINTF("<- Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
 				it->hInterrupt, it->dwOptions,
@@ -227,7 +225,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				ret = xpcu_set_interface(xpcu, usi);
+				ret = xpcu_set_interface(usi);
 #endif
 				DPRINTF("<- unique: 0x%lx, interfacenum: %lu, alternatesetting: %lu, options: %lx\n",
 				usi->dwUniqueID, usi->dwInterfaceNum,
@@ -245,7 +243,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 				ugdd->dwUniqueID, ugdd->dwBytes,
 				ugdd->dwOptions);
 
-				ret = xpcu_deviceinfo(xpcu, ugdd);
+				ret = xpcu_deviceinfo(ugdd);
 
 			}
 			break;
@@ -271,7 +269,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				xpcu = xpcu_find(e);
+				ret = xpcu_find(e);
 #endif
 
 #ifdef DEBUG
@@ -333,7 +331,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				ret = xpcu_close(xpcu, e);
+				ret = xpcu_close(e);
 #endif
 			}
 			break;
@@ -351,7 +349,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				ret = xpcu_int_wait(xpcu, it);
+				ret = xpcu_int_wait(it);
 #endif
 
 				DPRINTF("<- INT_WAIT_RETURN: Handle: 0x%lx, Options: %lx, ncmds: %lu, enableok: %lu, count: %lu, lost: %lu, stopped: %lu\n",
@@ -413,7 +411,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
-				ret = xpcu_found(xpcu, e);
+				ret = xpcu_found(e);
 #endif
 
 #ifdef DEBUG
@@ -507,8 +505,6 @@ int close(int fd) {
 	
 	if (fd == windrvrfd && windrvrfd >= 0) {
 		DPRINTF("close windrvrfd\n");
-
-		xpcu = NULL;
 		windrvrfd = -1;
 	}
 
