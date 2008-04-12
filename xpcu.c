@@ -300,15 +300,13 @@ static void xpcu_init(void) {
 	usb_find_devices();
 
 	busses = usb_get_busses();
-
-	pthread_mutex_init(&dummy_interrupt, NULL);
 }
 
 
 int xpcu_find(struct event *e) {
 	struct xpcu_event_s *xpcu_event = NULL;
 	struct xpcu_s *xpcu = NULL;
-	char* devpos;
+	char* usbdev;
 	struct usb_bus *bus;
 	int busnum = -1, devnum = -1;
 	int i;
@@ -317,20 +315,15 @@ int xpcu_find(struct event *e) {
 
 	xpcu_init();
 
-	xpcu_event = malloc(sizeof(struct xpcu_event_s));
-	if (!xpcu_event)
-		return -ENOMEM;
-
-	bzero(xpcu_event, sizeof(struct xpcu_event_s));
-	xpcu_event->xpcu = NULL;
-	xpcu_event->count = 0;
-	xpcu_event->interrupt_count = 0;
-	pthread_mutex_init(&xpcu_event->interrupt, NULL);
-
-	devpos = getenv("XILINX_USB_DEV");
-	if (devpos != NULL) {
+	usbdev = getenv("XILINX_USB_DEV");
+	if (usbdev != NULL) {
 		int j;
 		char *devstr = NULL, *remainder;
+		char *devpos;
+
+		devpos = strdup(usbdev);
+		if (!devpos)
+			return -ENOMEM;
 
 		DPRINTF("XILINX_USB_DEV=%s\n", devpos);
 
@@ -356,7 +349,18 @@ int xpcu_find(struct event *e) {
 				}
 			}
 		}
+		free(devpos);
 	}
+
+	xpcu_event = malloc(sizeof(struct xpcu_event_s));
+	if (!xpcu_event)
+		return -ENOMEM;
+
+	bzero(xpcu_event, sizeof(struct xpcu_event_s));
+	xpcu_event->xpcu = NULL;
+	xpcu_event->count = 0;
+	xpcu_event->interrupt_count = 0;
+	pthread_mutex_init(&xpcu_event->interrupt, NULL);
 
 	for (i = 0; i < e->dwNumMatchTables; i++) {
 
