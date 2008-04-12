@@ -15,6 +15,12 @@ struct xpcu_s {
 	int interface;
 	int alternate;
 	unsigned long card_type;
+};
+
+struct xpcu_event_s {
+	struct xpcu_s *xpcu;
+	int count;
+	int interrupt_count;
 	pthread_mutex_t interrupt;
 };
 
@@ -300,13 +306,26 @@ static void xpcu_init(void) {
 
 
 int xpcu_find(struct event *e) {
+	struct xpcu_event_s *xpcu_event = NULL;
 	struct xpcu_s *xpcu = NULL;
 	char* devpos;
 	struct usb_bus *bus;
 	int busnum = -1, devnum = -1;
 	int i;
 
+	e->handle = (unsigned long)NULL;
+
 	xpcu_init();
+
+	xpcu_event = malloc(sizeof(struct xpcu_event_s));
+	if (!xpcu_event)
+		return -ENOMEM;
+
+	bzero(xpcu_event, sizeof(struct xpcu_event_s));
+	xpcu_event->xpcu = NULL;
+	xpcu_event->count = 0;
+	xpcu_event->interrupt_count = 0;
+	pthread_mutex_init(&xpcu_event->interrupt, NULL);
 
 	devpos = getenv("XILINX_USB_DEV");
 	if (devpos != NULL) {
@@ -378,20 +397,24 @@ int xpcu_find(struct event *e) {
 
 							if ((interface->altsetting[ai].bInterfaceSubClass == e->matchTables[i].bInterfaceSubClass) &&
 									(interface->altsetting[ai].bInterfaceProtocol == e->matchTables[i].bInterfaceProtocol)){
+								int n = xpcu_event->count;
+
 								/* TODO: check interfaceClass! */
 								DPRINTF("found device with libusb\n");
 
-								xpcu = malloc(sizeof(struct xpcu_s));
-								if (!xpcu)
+								xpcu = realloc(xpcu, sizeof(struct xpcu_s) * (++xpcu_event->count));
+								if (!xpcu) {
+									free(xpcu_event);
 									return -ENOMEM;
+								}
 
-								bzero(xpcu, sizeof(struct xpcu_s));
-								xpcu->interface = -1;
-								xpcu->alternate = -1;
-								xpcu->dev = dev;
-								xpcu->card_type = e->dwCardType;
-								pthread_mutex_init(&xpcu->interrupt, NULL);
-								e->handle = (unsigned long)&xpcu;
+								bzero(&(xpcu[n]), sizeof(struct xpcu_s));
+								xpcu[n].interface = -1;
+								xpcu[n].alternate = -1;
+								xpcu[n].dev = dev;
+								xpcu[n].card_type = e->dwCardType;
+
+								xpcu_event->xpcu = xpcu;
 							}
 						}
 					}
@@ -400,13 +423,17 @@ int xpcu_find(struct event *e) {
 		}
 	}
 
-	e->handle = (unsigned long)xpcu;
+	e->handle = (unsigned long)xpcu_event;
 
 	return 0;
 }
 
 int xpcu_found(struct event *e) {
-	struct xpcu_s *xpcu = (struct xpcu_s*)e->handle;
+	struct xpcu_event_s *xpcu_event = (struct xpcu_event_s*)e->handle;
+	struct xpcu_s *xpcu = NULL;
+
+	if (xpcu_event && xpcu_event->count && (xpcu_event->interrupt_count <= xpcu_event->count))
+		xpcu = &(xpcu_event->xpcu[xpcu_event->interrupt_count-1]);
 
 	if (xpcu && xpcu->dev) {
 		struct usb_interface *interface = xpcu->dev->config->interface;
@@ -414,7 +441,7 @@ int xpcu_found(struct event *e) {
 		e->dwCardType = xpcu->card_type;
 		e->dwAction = 1;
 		e->dwEventId = 1;
-		e->u.Usb.dwUniqueID = e->handle;
+		e->u.Usb.dwUniqueID = (unsigned long)xpcu;
 		e->matchTables[0].VendorId = xpcu->dev->descriptor.idVendor;
 		e->matchTables[0].ProductId = xpcu->dev->descriptor.idProduct;
 		e->matchTables[0].bDeviceClass = xpcu->dev->descriptor.bDeviceClass;
@@ -428,34 +455,44 @@ int xpcu_found(struct event *e) {
 }
 
 int xpcu_close(struct event *e) {
-	struct xpcu_s *xpcu = (struct xpcu_s*)e->handle;
+	struct xpcu_event_s *xpcu_event = (struct xpcu_event_s*)e->handle;
 
-	if (!xpcu)
+	if (!xpcu_event)
 		return -ENODEV;
 
-	if(xpcu) {
-		if (xpcu->handle) {
-			xpcu_claim(xpcu, XPCU_RELEASE);
-			usb_close(xpcu->handle);
+	if(xpcu_event) {
+		struct  xpcu_s *xpcu;
+		int i;
+
+		for (i = 0; i < xpcu_event->count; i++) {
+			xpcu = &(xpcu_event->xpcu[i]);
+			if (xpcu->handle) {
+				xpcu_claim(xpcu, XPCU_RELEASE);
+				usb_close(xpcu->handle);
+			}
 		}
 
+		if (xpcu_event->xpcu)
+			free(xpcu_event->xpcu);
+
 		busses = NULL;
-		free(xpcu);
+		free(xpcu_event);
 	}
 
 	return 0;
 }
 
 int xpcu_int_state(struct interrupt *it, int enable) {
-	struct xpcu_s *xpcu = (struct xpcu_s*)it->hInterrupt;
+	struct xpcu_event_s *xpcu_event = (struct xpcu_event_s*)it->hInterrupt;
 	pthread_mutex_t *interrupt = &dummy_interrupt;
 
-	if (xpcu)
-		interrupt = &xpcu->interrupt;
+	if (xpcu_event)
+		interrupt = &xpcu_event->interrupt;
 	
 	if (enable == ENABLE_INTERRUPT) {
 		it->fEnableOk = 1;
 		it->fStopped = 0;
+		it->dwCounter = 0;
 		pthread_mutex_trylock(interrupt);
 	} else {
 		it->dwCounter = 0;
@@ -468,18 +505,16 @@ int xpcu_int_state(struct interrupt *it, int enable) {
 }
 
 int xpcu_int_wait(struct interrupt *it) {
-	struct xpcu_s *xpcu = (struct xpcu_s*)it->hInterrupt;
+	struct xpcu_event_s *xpcu_event = (struct xpcu_event_s*)it->hInterrupt;
 
-	if (it->hInterrupt != (unsigned long)xpcu)
-		return -ENODEV;
-	
-	if (xpcu) {
-		if (it->dwCounter == 0) {
-			it->dwCounter = 1;
+	if (xpcu_event) {
+		if (it->dwCounter < xpcu_event->count) {
+			it->dwCounter++;
 		} else {
-			pthread_mutex_lock(&xpcu->interrupt);
-			pthread_mutex_unlock(&xpcu->interrupt);
+			pthread_mutex_lock(&xpcu_event->interrupt);
+			pthread_mutex_unlock(&xpcu_event->interrupt);
 		}
+		xpcu_event->interrupt_count++;
 	} else {
 		pthread_mutex_lock(&dummy_interrupt);
 		pthread_mutex_unlock(&dummy_interrupt);

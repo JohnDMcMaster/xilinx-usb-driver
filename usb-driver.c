@@ -44,7 +44,8 @@
 #include "xpcu.h"
 
 static int (*ioctl_func) (int, int, void *) = NULL;
-static int windrvrfd = -1;
+static int *windrvrfds = NULL;
+static int windrvrfds_count = 0;
 static unsigned long ppbase = 0;
 static unsigned long ecpbase = 0;
 static struct parport_config *pport = NULL;
@@ -451,7 +452,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 int ioctl(int fd, unsigned long int request, ...) {
 	va_list args;
 	void *argp;
-	int ret;
+	int i;
 
 	if (!ioctl_func)                                                                    
 		ioctl_func = (int (*) (int, int, void *)) dlsym (RTLD_NEXT, "ioctl");             
@@ -460,12 +461,12 @@ int ioctl(int fd, unsigned long int request, ...) {
 	argp = va_arg (args, void *);
 	va_end (args);
 
-	if (fd == windrvrfd)
-		ret = do_wdioctl(fd, request, argp);
-	else
-		ret = (*ioctl_func) (fd, request, argp);
+	for (i = 0; i < windrvrfds_count; i++) {
+		if (fd == windrvrfds[i])
+			return do_wdioctl(fd, request, argp);
+	}
 
-	return ret;
+	return (*ioctl_func) (fd, request, argp);
 }
 
 int open (const char *pathname, int flags, ...) {
@@ -484,11 +485,15 @@ int open (const char *pathname, int flags, ...) {
 	}
 
 	if (!strcmp (pathname, "/dev/windrvr6")) {
-		DPRINTF("opening windrvr6\n");
+		DPRINTF("opening windrvr6 (%d)\n", windrvrfds_count);
+		windrvrfds = realloc(windrvrfds, sizeof(int) * (++windrvrfds_count));
+		if (!windrvrfds)
+			return -ENOMEM;
+
 #ifdef NO_WINDRVR
-		windrvrfd = fd = (*func) ("/dev/null", flags, mode);
+		windrvrfds[windrvrfds_count-1] = fd = (*func) ("/dev/null", flags, mode);
 #else
-		windrvrfd = fd = (*func) (pathname, flags, mode);
+		windrvrfds[windrvrfds_count-1] = fd = (*func) (pathname, flags, mode);
 #endif
 
 		return fd;
@@ -499,13 +504,22 @@ int open (const char *pathname, int flags, ...) {
 
 int close(int fd) {
 	static int (*func) (int) = NULL;
+	int i;
 
 	if (!func)
 		func = (int (*) (int)) dlsym(RTLD_NEXT, "close");
 	
-	if (fd == windrvrfd && windrvrfd >= 0) {
-		DPRINTF("close windrvrfd\n");
-		windrvrfd = -1;
+	for (i = 0; i < windrvrfds_count; i++) {
+		if (fd == windrvrfds[i] && windrvrfds[i] >= 0) {
+			int remaining = windrvrfds_count - (i + 1);
+			DPRINTF("close windrvr6 (%d)\n", i);
+			if (remaining)
+				memmove(&(windrvrfds[i]), &(windrvrfds[i+1]), remaining * sizeof(int));
+			windrvrfds = realloc(windrvrfds, sizeof(int) * --windrvrfds_count);
+			if (!windrvrfds_count)
+				windrvrfds = NULL;
+			break;
+		}
 	}
 
 	return (*func) (fd);
