@@ -294,6 +294,8 @@ static void xpcu_init(void) {
 	usb_find_devices();
 
 	busses = usb_get_busses();
+
+	pthread_mutex_init(&dummy_interrupt, NULL);
 }
 
 
