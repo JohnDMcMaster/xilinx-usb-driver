@@ -6,6 +6,7 @@
 #include <usb.h>
 #include <errno.h>
 #include <pthread.h>
+#include <stdint.h>
 #include "usb-driver.h"
 #include "xpcu.h"
 
