@@ -26,7 +26,6 @@ struct xpcu_event_s {
 };
 
 static struct usb_bus *busses = NULL;
-static pthread_mutex_t dummy_interrupt = PTHREAD_MUTEX_INITIALIZER;
 
 int xpcu_deviceinfo(struct usb_get_device_data *ugdd) {
 	struct xpcu_s *xpcu = (struct xpcu_s*)ugdd->dwUniqueID;
@@ -489,21 +488,20 @@ int xpcu_close(struct event *e) {
 
 int xpcu_int_state(struct interrupt *it, int enable) {
 	struct xpcu_event_s *xpcu_event = (struct xpcu_event_s*)it->hInterrupt;
-	pthread_mutex_t *interrupt = &dummy_interrupt;
 
-	if (xpcu_event)
-		interrupt = &xpcu_event->interrupt;
+	if (!xpcu_event)
+		return -ENODEV;
 	
 	if (enable == ENABLE_INTERRUPT) {
 		it->fEnableOk = 1;
 		it->fStopped = 0;
 		it->dwCounter = 0;
-		pthread_mutex_trylock(interrupt);
+		pthread_mutex_trylock(&xpcu_event->interrupt);
 	} else {
 		it->dwCounter = 0;
 		it->fStopped = 1;
-		if (pthread_mutex_trylock(interrupt) == EBUSY)
-			pthread_mutex_unlock(interrupt);
+		if (pthread_mutex_trylock(&xpcu_event->interrupt) == EBUSY)
+			pthread_mutex_unlock(&xpcu_event->interrupt);
 	}
 
 	return 0;
@@ -512,18 +510,16 @@ int xpcu_int_state(struct interrupt *it, int enable) {
 int xpcu_int_wait(struct interrupt *it) {
 	struct xpcu_event_s *xpcu_event = (struct xpcu_event_s*)it->hInterrupt;
 
-	if (xpcu_event) {
-		if (it->dwCounter < xpcu_event->count) {
-			it->dwCounter++;
-		} else {
-			pthread_mutex_lock(&xpcu_event->interrupt);
-			pthread_mutex_unlock(&xpcu_event->interrupt);
-		}
-		xpcu_event->interrupt_count++;
+	if (!xpcu_event)
+		return -ENODEV;
+
+	if (it->dwCounter < xpcu_event->count) {
+		it->dwCounter++;
 	} else {
-		pthread_mutex_lock(&dummy_interrupt);
-		pthread_mutex_unlock(&dummy_interrupt);
+		pthread_mutex_lock(&xpcu_event->interrupt);
+		pthread_mutex_unlock(&xpcu_event->interrupt);
 	}
+	xpcu_event->interrupt_count++;
 
 	return 0;
 }
