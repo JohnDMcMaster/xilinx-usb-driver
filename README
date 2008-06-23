@@ -30,7 +30,8 @@ In addition to the XILINX USB and parallel cables, devices based on the FTDI
 devices like the Amontec JTAGkey(-Tiny).
 
 Build the library by calling `make'. If you are on a 64 bit system but want
-to build a 32 bit library, run `make lib32' instead.
+to build a 32 bit library, run `make lib32' instead. Be sure to have the 32
+bit versions of libusb-devel and libftdi-devel installed!
 
 To use this library you have to preload the library before starting impact:
 
