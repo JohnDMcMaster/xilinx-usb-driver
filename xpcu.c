@@ -222,9 +222,11 @@ static int xpcu_claim(struct xpcu_s *xpcu, int claim) {
 		if (!claimed)
 			return 0;
 
+#if 0
 		ret = usb_release_interface(xpcu->handle, xpcu->interface);
 		if (!ret)
 			claimed = 0;
+#endif
 	}
 
 	return ret;
