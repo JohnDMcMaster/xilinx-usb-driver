@@ -39,6 +39,8 @@
 #include <sys/ioctl.h>
 #include <sys/utsname.h>
 #include <bits/wordsize.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
 #include "usb-driver.h"
 #include "config.h"
 #include "xpcu.h"
@@ -623,6 +625,29 @@ int access(const char *pathname, int mode) {
 		return (*func)(pathname, mode);
 	}
 }
+
+#if 0
+/* USB cable sharing needs to overload semop, TODO! */
+int semop (int __semid, struct sembuf *__sops, size_t __nsops) {
+	static int (*func) (int, struct sembuf*, size_t) = NULL;
+	int i;
+
+	if (!func)
+		func = (int (*) (int, struct sembuf*, size_t)) dlsym(RTLD_NEXT, "semop");
+	
+	fprintf(stderr,"semop: semid: 0x%X, elements: %d\n", __semid, __nsops);
+	for (i = 0; i < __nsops; i++) {
+		fprintf(stderr, " num: %u, op: %d, flg: %d\n", __sops[i].sem_num, __sops[i].sem_op, __sops[i].sem_flg);
+		if (__sops[i].sem_op < 0) {
+			fprintf(stderr, "SEMAPHORE LOCK\n");
+		} else {
+			fprintf(stderr, "SEMAPHORE UNLOCK\n");
+		}
+	}
+
+	return (*func)(__semid, __sops, __nsops);
+}
+#endif
 
 #if __WORDSIZE == 32
 int uname (struct utsname *__name) {
