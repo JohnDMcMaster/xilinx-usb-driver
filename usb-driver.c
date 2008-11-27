@@ -559,6 +559,12 @@ FILE *fopen(const char *path, const char *mode) {
 
 	if (!strcmp(path, "/proc/modules")) {
 		DPRINTF("opening /proc/modules\n");
+		if (!ret && errno == ENOENT) {
+			/* Hmm.. there appears to be no /proc/modules file
+			 * fake it then */
+			ret = (*func)("/dev/null", mode);
+			DPRINTF("No /proc/modules -- faking\n");
+		}
 #ifdef NO_WINDRVR
 		modulesfp = ret;
 		modules_read = 0;
