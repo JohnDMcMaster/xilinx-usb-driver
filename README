@@ -9,6 +9,7 @@ should work on every kernel version which is supported by libusb and supports
 ppdev. It was written against impact from ISE Webpack 9.1SP1 and tested with
 the following software:
 
+ * ISE Webpack 11.1
  * ISE Webpack 10.1
  * ISE Webpack 9.2SP1, SP2, SP3, SP4
  * ISE Webpack 9.1SP1, SP2, SP3
