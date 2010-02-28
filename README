@@ -57,7 +57,7 @@ Notes for the USB cable
 
 To use the device as an ordinary user, put the following line in a new
 file "libusb-driver.rules" in /etc/udev/rules.d/ and restart udev:
-ACTION=="add", BUS=="usb", SYSFS{idVendor}=="03fd", MODE="666"
+ACTION=="add", SUBSYSTEMS=="usb", ATTRS{idVendor}=="03fd", MODE="666"
 
 
 If your cable does not have the ID 03fd:0008 in the output of lsusb,
@@ -68,12 +68,16 @@ these steps:
 1. If you have no /etc/udev/rules.d/xusbdfwu.rules file, copy it from
    /path/to/ISE/bin/lin/xusbdfwu.rules to /etc/udev/rules.d/xusbdfwu.rules
 
-2. Install the package containing /sbin/fxload from your linux distribution.
+2. If you are running a newer version of udev (as in Debian Squeeze and
+   Ubuntu 9.10), you need to adapt the rules-file to the new udev-version:
+   sed -i -e 's/TEMPNODE/tempnode/' -e 's/SYSFS/ATTRS/g' -e 's/BUS/SUBSYSTEMS/' /etc/udev/rules.d/xusbdfwu.rules
+
+3. Install the package containing /sbin/fxload from your linux distribution.
    It is usually called "fxload"
 
-3. copy the files /path/to/ISE/bin/lin/xusb*.hex to /usr/share/
+4. copy the files /path/to/ISE/bin/lin/xusb*.hex to /usr/share/
 
-4. restart udev and re-plug the cable
+5. restart udev and re-plug the cable
 
 
 If you have multiple cables connected, you can specify the cable to use
@@ -140,7 +144,7 @@ To set-up the device:
 
 3. To use the device as an ordinary user, put the following line in a new file
    in /etc/udev/rules.d/ and restart udev:
-   ACTION=="add", BUS=="usb", SYSFS{idVendor}=="0403", SYSFS{idProduct}=="cff8", MODE="666"
+   ACTION=="add", SUBSYSTEMS=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="cff8", MODE="666"
    (replace the vendor and product id with your values)
 
 The support for FTDI 2232 based devices is experimental and they are currently
