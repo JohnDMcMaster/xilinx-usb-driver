@@ -32,7 +32,7 @@
 		</P>
 		<P><B>News</B>
 		<UL>
-			<LI><I>2008-03-26</I>: Xilinx has released their own drivers based on libusb with ISE Design Suite 10.1.
+			<LI><P><I>2008-03-26</I>: Xilinx has released their own drivers based on libusb with ISE Design Suite 10.1.
 			To use them, you need to set the environment-variable <kbd>XIL_IMPACT_USE_LIBUSB</kbd> to <kbd>1</kbd>
 			before running the tools. The driver on this page no longer needs to be preloaded if you only used
 			it to access USB cables. Parallel port support still seems to rely on <i>windrvr</i>, which can be
@@ -43,14 +43,21 @@
 			64-bit platform.</I>
 			To fix this, run the tools with <KBD>linux32</KBD> or preload the newest 32-bit version of
 			<i>libusb-driver</i>. This will lead the tools to believe that they are running on a 32-bit
-			platform and allows them to connect to the cable.</LI>
+			platform and allows them to connect to the cable.</P></LI>
 
-			<LI><I>2009-05-31</I>: ISE Design Suite 11.1 now uses their libusb based drivers as default, without
+			<LI><P><I>2009-05-31</I>: ISE Design Suite 11.1 now uses their libusb based drivers as default, without
 			the need to set <kbd>XIL_IMPACT_USE_LIBUSB</kbd>. If you want to use this driver with ISE 11.1 for USB
 			cables and disable the builtin support for libusb, you now have to set <kbd>XIL_IMPACT_USE_LIBUSB</kbd>
 			to <kbd>0</kbd> (<kbd>export XIL_IMPACT_USE_LIBUSB=0</kbd> or <kbd>setenv XIL_IMPACT_USE_LIBUSB 0</kbd>).
 			For parallel cables Xilinx still relies on <i>windrvr</i>. This library works fine with parallel cables and
-			ISE 11.1 with no need for <i>windrvr</i>.</LI>
+			ISE 11.1 with no need for <i>windrvr</i>.</P></LI>
+
+			<LI><P><I>2010-03-15</I>: If you are using newer udev-versions (like the version included in Debian Squeeze
+			and Ubuntu 9.10), then the file <i>/etc/udev/rules.d/xusbdfwu.rules</i> is incompatible with this udev
+			version. The effect of this is that the cable-firmware gets never loaded and the cable led never lights up.</P>
+			<P>To fix this, run the following command as root:<BR>
+			<kbd>sed -i -e 's/TEMPNODE/tempnode/' -e 's/SYSFS/ATTRS/g' -e 's/BUS/SUBSYSTEMS/' /etc/udev/rules.d/xusbdfwu.rules</kbd><BR>
+			You may have to reboot for this change to take effect.</P></LI>
 		</UL>
 		</P>
 		<H2>Supported Cables</H2>
