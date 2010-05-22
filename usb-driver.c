@@ -41,6 +41,8 @@
 #include <bits/wordsize.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
+#include <syscall.h>
+#include <linux/personality.h>
 #include "usb-driver.h"
 #include "config.h"
 #include "xpcu.h"
@@ -655,24 +657,6 @@ int semop (int __semid, struct sembuf *__sops, size_t __nsops) {
 }
 #endif
 
-#if __WORDSIZE == 32
-int uname (struct utsname *__name) {
-	static int (*func) (struct utsname*);
-	int ret;
-
-	if (!func)
-		func = (int (*) (struct utsname*)) dlsym(RTLD_NEXT, "uname");
-	
-	ret = (*func)(__name);
-
-	if (ret == 0 && (!strcmp(__name->machine, "x86_64"))) {
-		strcpy(__name->machine, "i686");
-	}
-	
-	return ret;
-}
-#endif
-
 /*
  * Ugly hack for ISE 12. They don't seem to open /proc/modules with
  * open() anymore...
@@ -682,4 +666,18 @@ int _Z14isModuleLoadedPci(char *module_name, int i) {
 	DPRINTF("_Z14isModuleLoadedPci: Checking for module %s (%d)\n", module_name, i);
 
 	return 1;
+}
+
+static void __attribute__ ((constructor)) libusbdriver_init(void) {
+	#if __WORDSIZE == 32
+	struct utsname un;
+	int ret;
+
+	ret = uname(&un);
+
+	if (ret == 0 && (!strcmp(un.machine, "x86_64"))) {
+		DPRINTF("setting 32bit personality\n");
+		(long)syscall(SYS_personality, PER_LINUX32);
+	}
+	#endif
 }
