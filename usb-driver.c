@@ -672,3 +672,11 @@ int uname (struct utsname *__name) {
 	return ret;
 }
 #endif
+
+/* Ugly hack for ISE 12. They don't seem to open /proc/modules with
+ * open() anymore... */
+int _Z14isModuleLoadedPci(void) {
+	DPRINTF("Faking _Z14isModuleLoadedPci\n");
+
+	return 1;
+}
