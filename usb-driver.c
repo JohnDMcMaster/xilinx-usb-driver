@@ -673,10 +673,13 @@ int uname (struct utsname *__name) {
 }
 #endif
 
-/* Ugly hack for ISE 12. They don't seem to open /proc/modules with
- * open() anymore... */
-int _Z14isModuleLoadedPci(void) {
-	DPRINTF("Faking _Z14isModuleLoadedPci\n");
+/*
+ * Ugly hack for ISE 12. They don't seem to open /proc/modules with
+ * open() anymore...
+ * echo '_Z14isModuleLoadedPci' | c++filt
+ */
+int _Z14isModuleLoadedPci(char *module_name, int i) {
+	DPRINTF("_Z14isModuleLoadedPci: Checking for module %s (%d)\n", module_name, i);
 
 	return 1;
 }
