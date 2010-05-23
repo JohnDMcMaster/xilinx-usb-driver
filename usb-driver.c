@@ -115,6 +115,7 @@ static int do_wdioctl(int fd, unsigned int request, unsigned char *wdioctl) {
 #ifndef NO_WINDRVR
 				ret = (*ioctl_func) (fd, request, wdioctl);
 #else
+				cr->hCard = 0;
 
 				pport = config_get((unsigned long)cr->Card.Item[0].I.IO.dwAddr / 0x10);
 				if (!pport)
