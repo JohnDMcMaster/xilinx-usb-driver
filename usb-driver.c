@@ -662,7 +662,7 @@ int semop (int __semid, struct sembuf *__sops, size_t __nsops) {
  * open() anymore...
  * echo '_Z14isModuleLoadedPci' | c++filt
  */
-int _Z14isModuleLoadedPci(char *module_name, int i) {
+long int _Z14isModuleLoadedPci(char *module_name, int i) {
 	DPRINTF("_Z14isModuleLoadedPci: Checking for module %s (%d)\n", module_name, i);
 
 	return 1;
