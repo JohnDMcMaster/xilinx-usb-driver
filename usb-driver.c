@@ -659,8 +659,10 @@ int semop (int __semid, struct sembuf *__sops, size_t __nsops) {
 #endif
 
 /*
- * Ugly hack for ISE 12. They don't seem to open /proc/modules with
- * open() anymore...
+ * Ugly hack for ISE 12. Preload doesn't seem to work correctly for
+ * libImpactComm.so. Even though the file is still read with fopen(),
+ * the version from libc is used and not the one from this file.
+ * Replace the function calling fopen() instead...
  * echo '_Z14isModuleLoadedPci' | c++filt
  */
 long int _Z14isModuleLoadedPci(char *module_name, int i) {
@@ -670,6 +672,22 @@ long int _Z14isModuleLoadedPci(char *module_name, int i) {
 }
 
 static void __attribute__ ((constructor)) libusbdriver_init(void) {
+	int i;
+	char buf[256];
+	char buf2[256];
+
+	for (i = 0; i < 4; i++) {
+		snprintf(buf, sizeof(buf), "XIL_IMPACT_ENV_LPT%d_BASE_ADDRESS", i+1);
+		snprintf(buf2, sizeof(buf2), "%x", 0x10*i);
+		setenv(buf, buf2, 1);
+		snprintf(buf, sizeof(buf), "XIL_IMPACT_ENV_LPT%d_ECP_ADDRESS", i+1);
+		snprintf(buf2, sizeof(buf2), "%x", (0x10*i)+0x400);
+		setenv(buf, buf2, 1);
+	}
+
+	setenv("XIL_IMPACT_USE_LIBUSB", "0", 1);
+	setenv("XIL_IMPACT_USE_WINDRIVER", "1", 1);
+
 	#if __WORDSIZE == 32
 	struct utsname un;
 	int ret;
