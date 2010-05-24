@@ -61,13 +61,15 @@ static int modules_read = 0;
 #define NO_WINDRVR 1
 
 void hexdump(unsigned char *buf, int len, char *prefix) {
-	int i;
+	int i = 0;
 
-	fprintf(stderr, "%s ", prefix);
-	for(i=0; i<len; i++) {
+	fprintf(stderr, "%s %03x: ", prefix, i);
+	for(i = 0; i<len; i++) {
 		fprintf(stderr,"%02x ", buf[i]);
-		if ((i % 16) == 15)
-			fprintf(stderr,"\n%s ", prefix);
+		if ((i % 16) == 7)
+			fprintf(stderr," ");
+		if (((i % 16) == 15) && ((i+1) < len))
+			fprintf(stderr,"\n%s %03x: ", prefix, i+1);
 	}
 	fprintf(stderr,"\n");
 }
@@ -669,6 +671,38 @@ long int _Z14isModuleLoadedPci(char *module_name, int i) {
 	DPRINTF("_Z14isModuleLoadedPci: Checking for module %s (%d)\n", module_name, i);
 
 	return 1;
+}
+
+/* XilCommNS::CPortResources::Instance() */
+void* _ZN9XilCommNS14CPortResources8InstanceEv() {
+	static void* (*func) (void) = NULL;
+	void *ret;
+
+	if (!func)
+		func = (void* (*) (void)) dlsym(RTLD_NEXT, "_ZN9XilCommNS14CPortResources8InstanceEv");
+
+	DPRINTF("-> XilCommNS::CPortResources::Instance()\n");
+
+	ret = func();
+
+#ifdef DEBUG
+	hexdump(ret, 0x29, "<-");
+	#if 0
+	{
+		void *portinfo;
+		portinfo = ((unsigned char**)ret+0x00);
+		hexdump(portinfo, 256, "PI");
+		hexdump(portinfo+0x50, 4, "BS");
+		hexdump(portinfo+0x54, 4, "BE");
+		hexdump(portinfo+0x58, 4, "ES");
+		hexdump(portinfo+0x5c, 4, "EE");
+	}
+	#endif
+#endif
+
+	DPRINTF("<- XilCommNS::CPortResources::Instance()\n");
+
+	return ret;
 }
 
 static void __attribute__ ((constructor)) libusbdriver_init(void) {
