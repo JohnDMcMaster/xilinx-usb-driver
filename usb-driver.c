@@ -677,25 +677,22 @@ long int _Z14isModuleLoadedPci(char *module_name, int i) {
 /* XilCommNS::CPortResources::Instance() */
 void* _ZN9XilCommNS14CPortResources8InstanceEv() {
 	static void* (*func) (void) = NULL;
-	static char *NetString = NULL;
-	static char *NetString2 = NULL;
 	char *filename = NULL;
 	void *ret;
+	int i;
 
-	if (!func)
+	if (!func) {
 		func = (void* (*) (void)) dlsym(RTLD_NEXT, "_ZN9XilCommNS14CPortResources8InstanceEv");
 
-	if (!NetString)
-		NetString = (char*)dlsym(RTLD_NEXT, "_ZTSN9XilCommNS9NetStringE");
-
-	if (!NetString2)
-		NetString2 = (char*)dlsym(RTLD_NEXT, "_ZTIN9XilCommNS9NetStringE");
-	
-	if (NetString && (!strcmp((char*)(NetString+0xb0), "/proc/sys/dev/parport/%s/base-addr")))
-		filename = (char*)(NetString+0xb0);
-
-	if (NetString2 && (!strcmp((char*)(NetString2+0xa4), "/proc/sys/dev/parport/%s/base-addr")))
-		filename = (char*)(NetString2+0xa4);
+		DPRINTF("Searching for filename starting at %p\n", func);
+		for(i = 0; i < 16384; i++) {
+			if (!strcmp(((char*)func)+i, "/proc/sys/dev/parport/%s/base-addr")) {
+				filename = ((char*)func)+i;
+				DPRINTF("Filename found at offset %p\n", (void*)(filename - ((char*)func)));
+				break;
+			}
+		}
+	}
 
 	if (filename) {
 		long pagesize;
