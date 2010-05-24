@@ -175,7 +175,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 		unsigned char *pos = writebuf;
 		int len;
 
-		DPRINTF("writing %d bytes due to %d following reads in %d chunks or full buffer\n", writepos-writebuf, nread, num);
+		DPRINTF("writing %zd bytes due to %d following reads in %d chunks or full buffer\n", writepos-writebuf, nread, num);
 		jtagkey_latency(BULK_LATENCY);
 
 		targ.num = writepos-pos;
@@ -188,7 +188,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 			if (len > USBBUFSIZE)
 				len = USBBUFSIZE;
 
-			DPRINTF("combined write of %d/%d\n",len,writepos-pos);
+			DPRINTF("combined write of %d/%zd\n",len,writepos-pos);
 			ftdi_write_data(&ftdic, pos, len);
 			pos += len;
 		}
@@ -279,7 +279,7 @@ int jtagkey_transfer(WD_TRANSFER *tr, int fd, unsigned int request, int ppbase, 
 
 	if (nread)
 	{
-		DPRINTF("writing %d bytes\n", writepos-writebuf);
+		DPRINTF("writing %zd bytes\n", writepos-writebuf);
 
 		*writepos = last_data;
 		writepos++;
