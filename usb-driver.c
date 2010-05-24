@@ -689,14 +689,16 @@ static void __attribute__ ((constructor)) libusbdriver_init(void) {
 	setenv("XIL_IMPACT_USE_WINDRIVER", "1", 1);
 
 	#if __WORDSIZE == 32
-	struct utsname un;
-	int ret;
+	{
+		struct utsname un;
+		int ret;
 
-	ret = uname(&un);
+		ret = uname(&un);
 
-	if (ret == 0 && (!strcmp(un.machine, "x86_64"))) {
-		DPRINTF("setting 32bit personality\n");
-		(long)syscall(SYS_personality, PER_LINUX32);
+		if (ret == 0 && (!strcmp(un.machine, "x86_64"))) {
+			DPRINTF("setting 32bit personality\n");
+			(long)syscall(SYS_personality, PER_LINUX32);
+		}
 	}
 	#endif
 }
