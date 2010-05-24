@@ -41,6 +41,7 @@
 #include <bits/wordsize.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
+#include <sys/mman.h>
 #include <syscall.h>
 #include <linux/personality.h>
 #include "usb-driver.h"
@@ -676,29 +677,59 @@ long int _Z14isModuleLoadedPci(char *module_name, int i) {
 /* XilCommNS::CPortResources::Instance() */
 void* _ZN9XilCommNS14CPortResources8InstanceEv() {
 	static void* (*func) (void) = NULL;
+	static char *NetString = NULL;
+	static char *NetString2 = NULL;
+	char *filename = NULL;
 	void *ret;
 
 	if (!func)
 		func = (void* (*) (void)) dlsym(RTLD_NEXT, "_ZN9XilCommNS14CPortResources8InstanceEv");
 
+	if (!NetString)
+		NetString = (char*)dlsym(RTLD_NEXT, "_ZTSN9XilCommNS9NetStringE");
+
+	if (!NetString2)
+		NetString2 = (char*)dlsym(RTLD_NEXT, "_ZTIN9XilCommNS9NetStringE");
+	
+	if (NetString && (!strcmp((char*)(NetString+0xb0), "/proc/sys/dev/parport/%s/base-addr")))
+		filename = (char*)(NetString+0xb0);
+
+	if (NetString2 && (!strcmp((char*)(NetString2+0xa4), "/proc/sys/dev/parport/%s/base-addr")))
+		filename = (char*)(NetString2+0xa4);
+
+	if (filename) {
+		long pagesize;
+		size_t protectlen;
+		void *start;
+		int len = strlen(filename) + 1;
+		int ret;
+
+		pagesize = sysconf(_SC_PAGE_SIZE);
+		DPRINTF("You have %lu bytes sized pages!\n", pagesize);
+
+		start = (void*)((long)filename & (~(pagesize-1)));
+
+		protectlen = pagesize;
+		if ((long)(filename + len) > (long)(start + protectlen))
+			protectlen += pagesize;
+
+		DPRINTF("Unprotecting %zd bytes starting at %p\n", protectlen, start);
+		ret = mprotect(start, protectlen, PROT_READ|PROT_WRITE);
+		if (ret == -1)
+			perror("mprotect");
+
+		DPRINTF("Replacing %s with /dev/zero\n", filename);
+		strcpy(filename, "/dev/zero");
+
+		DPRINTF("Reprotecting %zd bytes starting at %p\n", protectlen, start);
+		ret = mprotect(start, protectlen, PROT_READ|PROT_EXEC);
+		if (ret == -1)
+			perror("mprotect");
+	}
+
 	DPRINTF("-> XilCommNS::CPortResources::Instance()\n");
 
 	ret = func();
-
-#ifdef DEBUG
-	hexdump(ret, 0x29, "<-");
-	#if 0
-	{
-		void *portinfo;
-		portinfo = ((unsigned char**)ret+0x00);
-		hexdump(portinfo, 256, "PI");
-		hexdump(portinfo+0x50, 4, "BS");
-		hexdump(portinfo+0x54, 4, "BE");
-		hexdump(portinfo+0x58, 4, "ES");
-		hexdump(portinfo+0x5c, 4, "EE");
-	}
-	#endif
-#endif
 
 	DPRINTF("<- XilCommNS::CPortResources::Instance()\n");
 
