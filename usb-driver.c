@@ -674,6 +674,18 @@ long int _Z14isModuleLoadedPci(char *module_name, int i) {
 	return 1;
 }
 
+void cpr_segv_handler(int sig, siginfo_t *info, void *context) {
+	void *newmem;
+
+	DPRINTF("SEGV at %p, mapping memory\n", info->si_addr);
+	errno = 0;
+	newmem = mmap(info->si_addr, 1, PROT_READ, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, -1, 0);
+	if (newmem != info->si_addr) {
+		perror("libusb-driver.so: Can't map memory, crashing now");
+		exit(EXIT_FAILURE);
+	}
+}
+
 /* XilCommNS::CPortResources::Instance() */
 void* _ZN9XilCommNS14CPortResources8InstanceEv() {
 	static void* (*func) (void) = NULL;
@@ -682,16 +694,33 @@ void* _ZN9XilCommNS14CPortResources8InstanceEv() {
 	int i;
 
 	if (!func) {
+		struct sigaction act, oldact;
+		int sighand_installed = 0;
+
 		func = (void* (*) (void)) dlsym(RTLD_NEXT, "_ZN9XilCommNS14CPortResources8InstanceEv");
 
+		DPRINTF("Installing signal-handler for SIGSEGV\n");
+		bzero(&act, sizeof(struct sigaction));
+		act.sa_sigaction = cpr_segv_handler;
+		act.sa_flags = SA_SIGINFO;
+		if (sigaction(SIGSEGV, &act, &oldact) == 0) {
+			sighand_installed = 1;
+		}
+
 		DPRINTF("Searching for filename starting at %p\n", func);
-		for(i = 0; i < 16384; i++) {
+		for(i = 0; i < 32768; i++) {
 			if (!strcmp(((char*)func)+i, "/proc/sys/dev/parport/%s/base-addr")) {
 				filename = ((char*)func)+i;
 				DPRINTF("Filename found at offset %p\n", (void*)(filename - ((char*)func)));
 				break;
 			}
 		}
+		if (sighand_installed) {
+			DPRINTF("Restoring signal-handler for SIGSEGV\n");
+			sigaction(SIGSEGV, &oldact, NULL);
+		}
+		if (!filename)
+			fprintf(stderr, "libusb-driver.so: Can't find memory to patch, parallel cables will probably not work!\n");
 	}
 
 	if (filename) {
