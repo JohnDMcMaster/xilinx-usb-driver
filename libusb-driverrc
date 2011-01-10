@@ -4,3 +4,6 @@
 
 # Amontec Jtagkey
 LPT2 = FTDI:0403:cff8
+# Dangerous Prototypes Bus Blaster v2
+LPT3 = FTDI:0403:6010:2
+

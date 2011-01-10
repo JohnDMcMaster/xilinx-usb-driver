@@ -23,6 +23,7 @@ static void read_config() {
 #ifdef JTAGKEY
 	char *pbuf;
 	unsigned short vid, pid;
+	unsigned short iface;
 	int line, len, num;
 #endif
 
@@ -152,7 +153,7 @@ static void read_config() {
 				pbuf = buf + i;
 
 				for (; i < len; i++) {
-					if (buf[i] == ' ' || buf[i] == '\t')
+					if (buf[i] == ' ' || buf[i] == '\t' || buf[i] == ':')
 						break;
 				}
 
@@ -163,9 +164,16 @@ static void read_config() {
 					continue;
 				}
 
+				iface = 0;
+				pbuf = buf + i;
+				if (pbuf[0] == ':') {
+					iface = atoi(pbuf + 1);
+				}
+
 				pp_config[num].real = 0;
 				pp_config[num].usb_vid = vid;
 				pp_config[num].usb_pid = pid;
+				pp_config[num].usb_iface = iface;
 				pp_config[num].open = jtagkey_open;
 				pp_config[num].close = jtagkey_close;
 				pp_config[num].transfer = jtagkey_transfer;
@@ -243,3 +251,20 @@ unsigned short config_usb_pid(int num) {
 
 	return ret;
 }
+
+unsigned short config_usb_iface(int num) {
+	unsigned short ret = 0x00;
+	int i;
+	
+	read_config();
+	
+	for (i=0; i<sizeof(pp_config)/sizeof(struct parport_config); i++) {
+		if (pp_config[i].num == num) {
+			ret = pp_config[i].usb_iface;
+			break;
+		}
+	}
+
+	return ret;
+}
+

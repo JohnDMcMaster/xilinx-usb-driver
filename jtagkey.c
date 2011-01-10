@@ -32,7 +32,7 @@ static int jtagkey_latency(int latency) {
 	return ret;
 }
 
-static int jtagkey_init(unsigned short vid, unsigned short pid) {
+static int jtagkey_init(unsigned short vid, unsigned short pid, unsigned short iface) {
 	int ret = 0;
 	unsigned char c;
 
@@ -51,7 +51,7 @@ static int jtagkey_init(unsigned short vid, unsigned short pid) {
 		return ret;
 	}
 
-	if ((ret = ftdi_set_interface(&ftdic, INTERFACE_A)) != 0) {
+	if ((ret = ftdi_set_interface(&ftdic, iface)) != 0) {
 		fprintf(stderr, "unable to set interface: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
@@ -93,7 +93,7 @@ static int jtagkey_init(unsigned short vid, unsigned short pid) {
 int jtagkey_open(int num) {
 	int ret;
 
-	ret = jtagkey_init(config_usb_vid(num), config_usb_pid(num));
+	ret = jtagkey_init(config_usb_vid(num), config_usb_pid(num), config_usb_iface(num));
 
 	if (ret >= 0)
 		ret = 0xff;
