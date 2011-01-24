@@ -41,6 +41,11 @@ static int jtagkey_init(unsigned short vid, unsigned short pid, unsigned short i
 		return ret;
 	}
 	
+	if ((ret = ftdi_set_interface(&ftdic, iface)) != 0) {
+		fprintf(stderr, "unable to set interface: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
+		return ret;
+	}
+
 	if ((ret = ftdi_usb_open(&ftdic, vid, pid)) != 0) {
 		fprintf(stderr, "unable to open ftdi device: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
@@ -48,11 +53,6 @@ static int jtagkey_init(unsigned short vid, unsigned short pid, unsigned short i
 
 	if ((ret = ftdi_usb_reset(&ftdic)) != 0) {
 		fprintf(stderr, "unable reset device: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
-		return ret;
-	}
-
-	if ((ret = ftdi_set_interface(&ftdic, iface)) != 0) {
-		fprintf(stderr, "unable to set interface: %d (%s)\n", ret, ftdi_get_error_string(&ftdic));
 		return ret;
 	}
 
