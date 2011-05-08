@@ -66,6 +66,15 @@ the initial firmware has not been loaded (loading it changes the
 product-ID from another value to 8). To load the firmware follow
 these steps:
 
+1. Run ./setup_pcusb in this directory, this should set up everything
+   correctly:
+   - When $XILINX is set correctly:
+     $ ./setup_pcusb
+   - When $XILINX is not set, and ISE is installed in /opt/Xilinx/13.1:
+     $ ./setup_pcusb /opt/Xilinx/13.1/ISE_DS/ISE
+
+Old instructions, use only when the above script did not work:
+
 1. If you have no /etc/udev/rules.d/xusbdfwu.rules file, copy it from
    /path/to/ISE/bin/lin/xusbdfwu.rules to /etc/udev/rules.d/xusbdfwu.rules
 

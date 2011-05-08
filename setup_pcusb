@@ -1,0 +1,45 @@
+#!/bin/bash
+
+if [ "${XILINX}" = "" ]; then
+	if [ "${1}" = "" ]; then
+		echo "Syntax: ${0} /path/to/ISE"
+		exit 1
+	fi
+	root="${1}"
+else
+	root="${XILINX}"
+fi
+
+if [ "`id -u`" != "0" ]; then
+	echo "You are not root, trying sudo..."
+	ASROOT="sudo"
+else
+	ASROOT=""
+fi
+
+echo -n "Looking for USB cable files: "
+
+dir=""
+
+for check in "${root}/bin/lin64" "${root}/bin/lin"; do
+	if [ -e "${check}/xusbdfwu.rules" ]; then
+		dir="${check}"
+		break;
+	fi
+done
+
+if [ "${dir}" != "" ]; then
+	echo "${dir}"
+else
+	echo "NOT FOUND!"
+	exit 1
+fi
+
+echo "Copying formware to /usr/share:"
+for fw in "${dir}/"xusb*.hex; do
+	$ASROOT cp -v "${fw}" "/usr/share/"
+done
+
+echo "Installing udev rules:"
+$ASROOT bash -c "sed -e 's/TEMPNODE/tempnode/' -e 's/SYSFS/ATTRS/g' -e 's/BUS/SUBSYSTEMS/' \"${dir}/xusbdfwu.rules\" >/etc/udev/rules.d/xusbdfwu.rules"
+echo "done"
